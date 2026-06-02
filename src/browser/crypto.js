@@ -1,13 +1,18 @@
 'use strict';
 
-// Browser-side AES-256-GCM decryption with PBKDF2-SHA256 key derivation.
-// Mirrors the server-side parameters in `src/server/crypto.js`:
-//   - PBKDF2: SHA-256, configurable iterations (read from data-kdf-iterations)
-//   - AES: 256-bit key, GCM mode, 12-byte nonce, 16-byte auth tag
+// Browser-side AES-256-GCM decryption with PBKDF2 or Argon2id key derivation.
+// KDF is selected by the `data-kdf-algorithm` attribute in the HTML template.
+//
+// PBKDF2:   Web Crypto API (crypto.subtle)
+// Argon2id: hash-wasm WASM module
+//
+// AES: 256-bit key, GCM mode, 12-byte nonce, 16-byte auth tag.
 //
 // Unified failure path: ANY thrown value (DOMException OperationError,
 // TypeError, etc.) collapses to {ok: false}. Wrong-password and
 // tampered-ciphertext are indistinguishable under GCM by design.
+
+const { argon2id: hashWasmArgon2id } = require('hash-wasm');
 
 const KEY_BITS = 256;
 const TAG_BITS = 128;
@@ -27,7 +32,9 @@ function hexToBytes(hex) {
   return out;
 }
 
-async function deriveKey(password, salt, iterations) {
+// ---------- PBKDF2 (Web Crypto) ----------
+
+async function deriveKeyPbkdf2(password, salt, iterations) {
   const baseKey = await crypto.subtle.importKey(
     'raw',
     TEXT_ENCODER.encode(password),
@@ -49,9 +56,40 @@ async function deriveKey(password, salt, iterations) {
   );
 }
 
+// ---------- Argon2id (hash-wasm) ----------
+
+async function deriveKeyArgon2id(password, salt, opts) {
+  const timeCost = (opts && Number.isInteger(opts.timeCost) && opts.timeCost >= 1)
+    ? opts.timeCost : 3;
+  const memoryCost = (opts && Number.isInteger(opts.memoryCost) && opts.memoryCost >= 8192)
+    ? opts.memoryCost : 65536;
+  const parallelism = (opts && Number.isInteger(opts.parallelism) && opts.parallelism >= 1)
+    ? opts.parallelism : 1;
+
+  const raw = await hashWasmArgon2id({
+    password,
+    salt,
+    iterations: timeCost,
+    memorySize: memoryCost,
+    parallelism,
+    hashLength: KEY_BITS / 8,
+    outputType: 'binary',
+  });
+
+  // Import the raw bytes as an AES-GCM key.
+  // extractable=true so storage.js can persist the key when autoSave is on.
+  return crypto.subtle.importKey(
+    'raw',
+    raw,
+    { name: 'AES-GCM', length: KEY_BITS },
+    true,
+    ['decrypt']
+  );
+}
+
+// ---------- AES-GCM decryption ----------
+
 async function decryptWithKey(key, nonce, ciphertextWithTag) {
-  // Web Crypto AES-GCM expects ciphertext||tag as a single buffer (same as Node's
-  // `decipher.update + setAuthTag(tag); decipher.final()` flow when concatenated).
   const plainBuf = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: nonce, tagLength: TAG_BITS },
     key,
@@ -60,15 +98,23 @@ async function decryptWithKey(key, nonce, ciphertextWithTag) {
   return TEXT_DECODER.decode(plainBuf);
 }
 
-// High-level: derive a key from the password + decrypt in one shot.
-// Returns {ok: true, plaintext, key} or {ok: false}.
-async function tryDecryptWithPassword({ password, saltHex, nonceHex, ciphertextHex, iterations }) {
+// ---------- High-level: derive + decrypt ----------
+
+async function tryDecryptWithPassword({ password, saltHex, nonceHex, ciphertextHex,
+                                        algorithm, iterations, timeCost, memoryCost, parallelism }) {
   try {
     const salt = hexToBytes(saltHex);
     const nonce = hexToBytes(nonceHex);
     const ciphertext = hexToBytes(ciphertextHex);
     if (ciphertext.length < TAG_BYTES) return { ok: false };
-    const key = await deriveKey(password, salt, iterations);
+
+    let key;
+    if (algorithm === 'argon2id') {
+      key = await deriveKeyArgon2id(password, salt, { timeCost, memoryCost, parallelism });
+    } else {
+      key = await deriveKeyPbkdf2(password, salt, iterations || 250000);
+    }
+
     const plaintext = await decryptWithKey(key, nonce, ciphertext);
     return { ok: true, plaintext, key };
   } catch (_e) {
@@ -92,7 +138,8 @@ async function tryDecryptWithKey({ key, nonceHex, ciphertextHex }) {
 module.exports = {
   tryDecryptWithPassword,
   tryDecryptWithKey,
-  deriveKey,
+  deriveKeyPbkdf2,
+  deriveKeyArgon2id,
   decryptWithKey,
   hexToBytes,
 };

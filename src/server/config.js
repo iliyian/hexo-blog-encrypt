@@ -1,7 +1,10 @@
 'use strict';
 
-const FLOOR = 100000;
-const RECOMMENDED = 600000;
+const PBKDF2_FLOOR = 100000;
+const PBKDF2_RECOMMENDED = 600000;
+// Argon2id parameter floors: time ≥ 1, memory ≥ 8192 (8 MB), parallelism ≥ 1.
+const ARGON2_TIME_FLOOR = 1;
+const ARGON2_MEMORY_FLOOR = 8192;
 
 const DEFAULTS = Object.freeze({
   abstract: 'Here\'s something encrypted, password is required to continue reading.',
@@ -18,7 +21,13 @@ const DEFAULTS = Object.freeze({
     text: 'Decrypt',
   }),
   kdf: Object.freeze({
+    algorithm: 'pbkdf2',
+    // PBKDF2 settings (used when algorithm === 'pbkdf2')
     iterations: 250000,
+    // Argon2id settings (used when algorithm === 'argon2id')
+    timeCost: 3,
+    memoryCost: 65536,
+    parallelism: 1,
   }),
 });
 
@@ -120,20 +129,44 @@ function resolve(hexoConfig, postData, logger) {
   merged.password = String(merged.password);
   if (merged.password === '') return null;
 
-  // KDF iteration floor + warn band. (deepMerge always populates merged.kdf
-  // from DEFAULTS.kdf when the user does not set it, so we only need to
-  // validate the resolved value here.)
-  if (!Number.isInteger(merged.kdf.iterations) || merged.kdf.iterations < FLOOR) {
-    throw new Error(
-      `hexo-blog-encrypt: kdf.iterations must be an integer ≥ ${FLOOR.toLocaleString('en-US').replace(/,/g, '_')} ` +
-      `(got ${merged.kdf.iterations}). 100_000 is the absolute floor; ${RECOMMENDED.toLocaleString('en-US').replace(/,/g, '_')}+ is recommended (OWASP 2023).`
-    );
+  // Normalise KDF algorithm: undefined/garbage → 'pbkdf2'.
+  if (typeof merged.kdf !== 'object' || merged.kdf === null) {
+    merged.kdf = { algorithm: 'pbkdf2', iterations: undefined };
   }
-  if (merged.kdf.iterations < RECOMMENDED) {
-    log.warn(
-      `hexo-blog-encrypt: kdf.iterations=${merged.kdf.iterations} is below the OWASP-recommended 600_000. ` +
-      'Consider raising it for stronger brute-force resistance.'
-    );
+  if (!merged.kdf.algorithm || !['pbkdf2', 'argon2id'].includes(merged.kdf.algorithm)) {
+    merged.kdf.algorithm = 'pbkdf2';
+  }
+
+  if (merged.kdf.algorithm === 'pbkdf2') {
+    if (!Number.isInteger(merged.kdf.iterations) || merged.kdf.iterations < PBKDF2_FLOOR) {
+      throw new Error(
+        `hexo-blog-encrypt: kdf.iterations must be an integer ≥ ${PBKDF2_FLOOR.toLocaleString('en-US').replace(/,/g, '_')} ` +
+        `(got ${merged.kdf.iterations}). 100_000 is the absolute floor; ${PBKDF2_RECOMMENDED.toLocaleString('en-US').replace(/,/g, '_')}+ is recommended (OWASP 2023).`
+      );
+    }
+    if (merged.kdf.iterations < PBKDF2_RECOMMENDED) {
+      log.warn(
+        `hexo-blog-encrypt: kdf.iterations=${merged.kdf.iterations} is below the OWASP-recommended 600_000. ` +
+        'Consider raising it for stronger brute-force resistance.'
+      );
+    }
+  } else {
+    // Argon2id validation.
+    if (!Number.isInteger(merged.kdf.timeCost) || merged.kdf.timeCost < ARGON2_TIME_FLOOR) {
+      throw new Error(
+        `hexo-blog-encrypt: kdf.timeCost must be an integer ≥ ${ARGON2_TIME_FLOOR} (got ${merged.kdf.timeCost}).`
+      );
+    }
+    if (!Number.isInteger(merged.kdf.memoryCost) || merged.kdf.memoryCost < ARGON2_MEMORY_FLOOR) {
+      throw new Error(
+        `hexo-blog-encrypt: kdf.memoryCost must be an integer ≥ ${ARGON2_MEMORY_FLOOR} (8 MB) (got ${merged.kdf.memoryCost}).`
+      );
+    }
+    if (!Number.isInteger(merged.kdf.parallelism) || merged.kdf.parallelism < 1) {
+      throw new Error(
+        `hexo-blog-encrypt: kdf.parallelism must be an integer ≥ 1 (got ${merged.kdf.parallelism}).`
+      );
+    }
   }
 
   // wrong_hash_message handling under GCM:
@@ -157,6 +190,8 @@ function resolve(hexoConfig, postData, logger) {
 module.exports = {
   resolve,
   DEFAULTS,
-  FLOOR,
-  RECOMMENDED,
+  PBKDF2_FLOOR,
+  PBKDF2_RECOMMENDED,
+  ARGON2_TIME_FLOOR,
+  ARGON2_MEMORY_FLOOR,
 };

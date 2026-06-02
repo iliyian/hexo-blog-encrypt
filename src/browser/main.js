@@ -20,7 +20,11 @@ function readWireFormat(mainElement) {
     whm: ds.whm || ds.wpm || 'Wrong password.',
     saltHex: ds.salt,
     nonceHex: ds.nonce,
+    kdfAlgorithm: ds.kdfAlgorithm || 'pbkdf2',
     iterations: parseInt(ds.kdfIterations, 10) || 250000,
+    timeCost: parseInt(ds.kdfTimeCost, 10) || 3,
+    memoryCost: parseInt(ds.kdfMemoryCost, 10) || 65536,
+    parallelism: parseInt(ds.kdfParallelism, 10) || 1,
     autoSave: ds.autoSave === 'true',
     ciphertextHex: ciphertextNode ? ciphertextNode.textContent.trim() : '',
   };
@@ -89,7 +93,11 @@ async function handleSubmit(mainElement, wire, form, guardedReveal) {
       saltHex: wire.saltHex,
       nonceHex: wire.nonceHex,
       ciphertextHex: wire.ciphertextHex,
+      algorithm: wire.kdfAlgorithm,
       iterations: wire.iterations,
+      timeCost: wire.timeCost,
+      memoryCost: wire.memoryCost,
+      parallelism: wire.parallelism,
     });
   } finally {
     ui.setBusy(form, false);

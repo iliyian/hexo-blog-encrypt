@@ -35,7 +35,11 @@ const PLACEHOLDERS = [
   { token: '{{hbeFormat}}',            field: 'format',         mode: 'attr' },
   { token: '{{hbeWrongPassMessage}}',  field: 'wpm',            mode: 'attr' },
   { token: '{{hbeWrongHashMessage}}',  field: 'whm',            mode: 'attr' },
+  { token: '{{hbeKdfAlgorithm}}',      field: 'kdfAlgorithm',   mode: 'attr' },
   { token: '{{hbeKdfIterations}}',     field: 'kdfIterations',  mode: 'attr' },
+  { token: '{{hbeKdfTimeCost}}',       field: 'kdfTimeCost',    mode: 'attr' },
+  { token: '{{hbeKdfMemoryCost}}',     field: 'kdfMemoryCost',  mode: 'attr' },
+  { token: '{{hbeKdfParallelism}}',    field: 'kdfParallelism', mode: 'attr' },
   { token: '{{hbeAutoSave}}',          field: 'autoSave',       mode: 'attr' },
   { token: '{{hbeMessage}}',           field: 'message',        mode: 'text' },
   { token: '{{hbeButtonClass}}',       field: 'buttonClass',    mode: 'attr' },
@@ -48,6 +52,9 @@ const PLACEHOLDERS = [
 function valueOf(opts, field) {
   const v = opts[field];
   if (field === 'kdfIterations') return String(v);
+  if (field === 'kdfTimeCost') return String(v);
+  if (field === 'kdfMemoryCost') return String(v);
+  if (field === 'kdfParallelism') return String(v);
   if (field === 'autoSave') return v ? 'true' : 'false';
   return v === undefined || v === null ? '' : v;
 }

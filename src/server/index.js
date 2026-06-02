@@ -3,7 +3,7 @@
 const path = require('node:path');
 
 const { resolve } = require('./config');
-const { encrypt } = require('./crypto');
+const { encrypt, encryptArgon2id } = require('./crypto');
 const { createRenderer } = require('./template');
 const { createGenerator } = require('./generator');
 const { createLogger } = require('./logger');
@@ -81,7 +81,7 @@ function register(hexo) {
     sourcemapPath: BUNDLE_SOURCEMAP_PATH,
   });
 
-  hexo.extend.filter.register('after_post_render', function v4Filter(data) {
+  hexo.extend.filter.register('after_post_render', async function v4Filter(data) {
     // Idempotence: stamp a per-instance Symbol on `data` after a successful
     // pass so re-entry on the same object is a no-op. We deliberately do NOT
     // use `data.encrypt === true` (a user-set "please encrypt" front-matter
@@ -133,9 +133,27 @@ function register(hexo) {
     data.origin = data.content;
 
     const plaintext = String(data.content == null ? '' : data.content);
-    const { salt, nonce, ciphertext } = encrypt(plaintext, cfg.password, {
-      iterations: cfg.kdf.iterations,
-    });
+
+    let salt, nonce, ciphertext, kdf;
+    if (cfg.kdf.algorithm === 'argon2id') {
+      const result = await encryptArgon2id(plaintext, cfg.password, {
+        timeCost: cfg.kdf.timeCost,
+        memoryCost: cfg.kdf.memoryCost,
+        parallelism: cfg.kdf.parallelism,
+      });
+      salt = result.salt;
+      nonce = result.nonce;
+      ciphertext = result.ciphertext;
+      kdf = result.kdf;
+    } else {
+      const result = encrypt(plaintext, cfg.password, {
+        iterations: cfg.kdf.iterations,
+      });
+      salt = result.salt;
+      nonce = result.nonce;
+      ciphertext = result.ciphertext;
+      kdf = { algorithm: 'pbkdf2', iterations: cfg.kdf.iterations };
+    }
 
     const buttonShow = !cfg.decryptButton || cfg.decryptButton.show !== false;
     const buttonText = (cfg.decryptButton && typeof cfg.decryptButton.text === 'string')
@@ -154,7 +172,11 @@ function register(hexo) {
       whm: cfg.wrong_hash_message,
       buttonClass: buttonShow ? '' : ' hbe-button-hidden',
       buttonText,
-      kdfIterations: cfg.kdf.iterations,
+      kdfAlgorithm: kdf.algorithm,
+      kdfIterations: kdf.iterations || '',
+      kdfTimeCost: kdf.timeCost || '',
+      kdfMemoryCost: kdf.memoryCost || '',
+      kdfParallelism: kdf.parallelism || '',
       autoSave: !!cfg.autoSave,
     });
 

@@ -48,6 +48,10 @@
   "peerDependencies": {
     "hexo": ">=5"
   },
+  "dependencies": {
+    "argon2": "^0.41.0",
+    "hash-wasm": "^4.11.0"
+  },
   "devDependencies": {
     "@playwright/test": "^1.45",
     "c8": "^10",
