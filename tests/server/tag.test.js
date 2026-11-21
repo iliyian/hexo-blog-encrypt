@@ -32,6 +32,13 @@ function extractPayload(html) {
   };
 }
 
+function extractPayloads(html) {
+  return html
+    .split('<div class="hbe hbe-container"')
+    .slice(1)
+    .map((chunk) => extractPayload(chunk));
+}
+
 async function decryptPayload(payload, password) {
   if (payload.algorithm === 'argon2id') {
     const dk = await argon2.hash(password, {
@@ -406,4 +413,47 @@ test('restoreStash leaves unknown placeholder ids untouched', async () => {
     },
   });
   assert.equal(out, '<p>x</p><!--hexo-blog-encrypt:stash:missing-->');
+});
+
+
+// ---------------------------------------------------------------------------
+// Tree-shaped nesting: one outer block with sibling children, one grandchild
+// ---------------------------------------------------------------------------
+test('tree-shaped nested blocks decrypt independently', async () => {
+  const html = await render([
+    'TOP PUBLIC',
+    '{% encrypt "root" %}',
+    'ROOT PUBLIC',
+    '{% encrypt "a" %}A SECRET{% endencrypt %}',
+    '{% encrypt "b" %}B PUBLIC {% encrypt "b1" %}B1 SECRET{% endencrypt %}{% endencrypt %}',
+    '{% encrypt "c" %}C SECRET{% endencrypt %}',
+    '{% endencrypt %}',
+    'BOTTOM PUBLIC',
+  ].join('\n'));
+
+  assert.match(html, /TOP PUBLIC/);
+  assert.match(html, /BOTTOM PUBLIC/);
+  assert.equal(html.includes('ROOT PUBLIC'), false);
+  assert.equal(html.includes('hexo-blog-encrypt:stash'), false);
+  assert.equal(extractPayloads(html).length, 1);
+
+  const rootLayer = await decryptPayload(extractPayload(html), 'root');
+  assert.match(rootLayer, /ROOT PUBLIC/);
+  assert.equal(rootLayer.includes('B1 SECRET'), false);
+  const children = extractPayloads(rootLayer);
+  assert.equal(children.length, 3);
+
+  const a = await decryptPayload(children[0], 'a');
+  const b = await decryptPayload(children[1], 'b');
+  const c = await decryptPayload(children[2], 'c');
+  assert.equal(a.trim(), '<p>A SECRET</p>');
+  assert.equal(c.trim(), '<p>C SECRET</p>');
+  assert.match(b, /B PUBLIC/);
+  assert.equal(b.includes('B1 SECRET'), false);
+
+  const grandchild = extractPayloads(b);
+  assert.equal(grandchild.length, 1);
+  assert.equal((await decryptPayload(grandchild[0], 'b1')).trim(), '<p>B1 SECRET</p>');
+
+  await assert.rejects(() => decryptPayload(children[0], 'wrong'));
 });

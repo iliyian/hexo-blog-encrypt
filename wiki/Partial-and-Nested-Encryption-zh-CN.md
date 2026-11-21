@@ -126,3 +126,31 @@ password: outer-password
 - [基于标签的加密](Tag-Based-Encryption-zh-CN)
 - [安全模型](Security-Model-zh-CN)
 - [浏览器支持](Browser-Support-zh-CN)
+
+## 树状结构
+
+嵌套不要求是一条链: 一个块里可以放多个并列的子块, 子块里还能继续嵌套:
+
+```markdown
+{% encrypt "root" %}
+输入 root 后可见.
+
+{% encrypt "a" %}
+分支 A.
+{% endencrypt %}
+
+{% encrypt "b" %}
+分支 B 在输入 root 后可见.
+
+{% encrypt "b1" %}
+B 的下级秘密.
+{% endencrypt %}
+{% endencrypt %}
+
+{% encrypt "c" %}
+分支 C.
+{% endencrypt %}
+{% endencrypt %}
+```
+
+输入 root 后会出现三个独立密码框. `a` 和 `c` 各自独立解密; `b` 解密后显示公开文字和第四个密码框 (`b1`). 某个分支输错密码不影响其他分支, 每个分支仍使用独立的 salt/nonce.

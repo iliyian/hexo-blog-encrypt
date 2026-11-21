@@ -126,3 +126,31 @@ The multi-argument form and same-name nesting can be combined in either order. U
 - [Tag-Based Encryption](Tag-Based-Encryption)
 - [Security Model](Security-Model)
 - [Browser Support](Browser-Support)
+
+## Tree-shaped layouts
+
+Nesting is not limited to one chain. A block can hold several sibling blocks, and any of those can hold another layer:
+
+```markdown
+{% encrypt "root" %}
+Seen after the root password.
+
+{% encrypt "a" %}
+Branch A.
+{% endencrypt %}
+
+{% encrypt "b" %}
+Branch B is public after the root password.
+
+{% encrypt "b1" %}
+B's sub-secret.
+{% endencrypt %}
+{% endencrypt %}
+
+{% encrypt "c" %}
+Branch C.
+{% endencrypt %}
+{% endencrypt %}
+```
+
+After the root password, three separate password forms appear. `a` and `c` decrypt independently; `b` reveals its public text plus a fourth password form for `b1`. Wrong passwords on one branch do not affect the others, and every branch keeps its own salt/nonce.

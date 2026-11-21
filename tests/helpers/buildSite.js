@@ -14,7 +14,7 @@ const CALLBACK_TEMPLATE_REL = path.join('templates', 'callback-post.md');
 const NON_ASCII_BUTTON_TEMPLATE_REL = path.join('templates', 'non-ascii-button-post.md');
 const HIDDEN_BUTTON_TEMPLATE_REL = path.join('templates', 'hidden-button-post.md');
 const MULTI_POST_TEMPLATES = ['multi-post-alpha.md', 'multi-post-bravo.md'];
-const PARTIAL_NESTED_TEMPLATES = ['partial-nested.md', 'post-nested.md'];
+const PARTIAL_NESTED_TEMPLATES = ['partial-nested.md', 'post-nested.md', 'tree-nested.md'];
 const POSTS_REL = path.join('source', '_posts');
 
 /**

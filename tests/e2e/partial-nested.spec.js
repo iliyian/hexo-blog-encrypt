@@ -72,3 +72,42 @@ test.describe('partial and nested encryption', () => {
     await expect(page.locator('body')).toContainText('BLOCK SECRET');
   });
 });
+
+test.describe('tree-shaped nesting', () => {
+  test('sibling branches decrypt independently, each with its own password', async ({ page }) => {
+    await page.goto('/tree-nested/');
+
+    await expect(page.locator('body')).toContainText('TOP PUBLIC');
+    await expect(page.locator('body')).toContainText('BOTTOM PUBLIC');
+    await expect(page.locator('body')).not.toContainText('ROOT PUBLIC');
+    await expect(page.locator('.hbe-container')).toHaveCount(1);
+
+    // Root layer reveals three sibling blocks.
+    await submitPassword(page.locator('.hbe-container').first(), 'root');
+    await expect(page.locator('body')).toContainText('ROOT PUBLIC');
+    await expect(page.locator('.hbe-container')).toHaveCount(3);
+
+    // Branch A is independent. Revealed containers drop out of the
+    // `.hbe-container` list, so always target the first remaining one.
+    await submitPassword(page.locator('.hbe-container').first(), 'a');
+    await expect(page.locator('body')).toContainText('BRANCH A SECRET');
+    await expect(page.locator('body')).not.toContainText('BRANCH C SECRET');
+    await expect(page.locator('.hbe-container')).toHaveCount(2);
+
+    // Branch B is still locked; it reveals public text plus a nested form.
+    await expect(page.locator('body')).not.toContainText('BRANCH B1 SECRET');
+    await submitPassword(page.locator('.hbe-container').first(), 'b');
+    await expect(page.locator('body')).toContainText('BRANCH B PUBLIC');
+    // B's nested form plus untouched branch C.
+    await expect(page.locator('.hbe-container')).toHaveCount(2);
+
+    await submitPassword(page.locator('.hbe-container').first(), 'b1');
+    await expect(page.locator('body')).toContainText('BRANCH B1 SECRET');
+    await expect(page.locator('.hbe-container')).toHaveCount(1);
+
+    // Branch C still decrypts with its own password.
+    await submitPassword(page.locator('.hbe-container').first(), 'c');
+    await expect(page.locator('body')).toContainText('BRANCH C SECRET');
+    await expect(page.locator('.hbe-container')).toHaveCount(0);
+  });
+});
