@@ -1,17 +1,21 @@
 'use strict';
 
-// Block-level encryption tags.
+// Block-level encryption tag.
 //
 //   {% encrypt "password" %} ... {% endencrypt %}
 //     The block is encrypted on its own; the rest of the post stays public.
 //
-//   {% encrypt_nested "outer" "inner" ... %} ... {% endencrypt_nested %}
+//   {% encrypt "outer" "inner" ... %} ... {% endencrypt %}
 //     Every password adds one layer. The first argument is the outermost
 //     password (the one the reader sees first); additional arguments encrypt
-//     the already-encrypted result. This is the explicit nested form and does
-//     not rely on Nunjucks being able to nest same-name block tags (it can't).
+//     the already-encrypted result.
 //
-// The tags themselves are synchronous and only emit HTML-comment markers.
+//   {% encrypt "outer" %} ... {% encrypt "inner" %} ... {% endencrypt %}{% endencrypt %}
+//     Same-name nesting also works. Use this when each layer has its own
+//     public text; use multiple arguments when the same body is locked by a
+//     chain of passwords.
+//
+// The tag itself is synchronous and only emits HTML-comment markers.
 // Encryption happens in a lower-priority `after_post_render` filter:
 //
 //   - Hexo's async block tags do not propagate a rejected promise (the
@@ -20,8 +24,8 @@
 //   - A filter's rejection *is* awaited by Hexo's render pipeline, so a
 //     misconfigured block fails the build with a normal error.
 //
-// Markers are processed innermost-first, so an `{% encrypt %}` inside an
-// `{% encrypt_nested %}` block is encrypted into the outer layer correctly.
+// Markers are processed innermost-first, so nested `{% encrypt %}` blocks are
+// encrypted into the enclosing layer correctly.
 
 const { resolve } = require('./config');
 const { encrypt, encryptArgon2id } = require('./crypto');
@@ -46,12 +50,11 @@ function titleOf(post) {
     : '';
 }
 
-function parsePasswords(args, tagName, minLayers, post) {
+function parsePasswords(args, tagName, post) {
   const passwords = Array.isArray(args) ? args.map((v) => String(v)) : [];
-  if (passwords.length < minLayers) {
+  if (passwords.length === 0) {
     throw new Error(
-      `hexo-blog-encrypt: {% ${tagName} %} requires at least ${minLayers} password ` +
-      `argument${minLayers === 1 ? '' : 's'}${titleOf(post)}.`
+      `hexo-blog-encrypt: {% ${tagName} %} requires at least 1 password argument${titleOf(post)}.`
     );
   }
   for (const password of passwords) {
@@ -74,16 +77,15 @@ function makeMarker(tagName, passwords) {
 }
 
 function createTagHandlers() {
-  function tag(tagName, minLayers) {
+  function tag(tagName) {
     return function renderMarker(args, body) {
-      const passwords = parsePasswords(args, tagName, minLayers, this);
+      const passwords = parsePasswords(args, tagName, this);
       const marker = makeMarker(tagName, passwords);
       return marker.start + String(body == null ? '' : body) + marker.end;
     };
   }
   return {
-    encrypt: tag('encrypt', 1),
-    encryptNested: tag('encrypt_nested', 2),
+    encrypt: tag('encrypt'),
   };
 }
 
@@ -303,7 +305,6 @@ async function processBlocks(html, deps) {
 function registerTags(hexo) {
   const handlers = createTagHandlers();
   hexo.extend.tag.register('encrypt', handlers.encrypt, { ends: true });
-  hexo.extend.tag.register('encrypt_nested', handlers.encryptNested, { ends: true });
 }
 
 function registerBlockFilter(hexo, deps) {

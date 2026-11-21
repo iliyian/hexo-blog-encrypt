@@ -2,12 +2,11 @@
 
 [简体中文](Partial-and-Nested-Encryption-zh-CN)
 
-This fork adds two block-level tags on top of upstream v4.1.0:
+This fork adds one block-level tag on top of upstream v4.1.0:
 
-- `{% encrypt "password" %}` encrypts **only that block**. The rest of the post stays public.
-- `{% encrypt_nested "outer" "inner" ... %}` encrypts the block once per password, outermost first.
+- `{% encrypt "password" ... %}` encrypts **only that block**. The rest of the post stays public. Multiple password arguments add layers, outermost first, and same-name blocks can be nested when each layer needs its own public text.
 
-Both tags are available in the fork only. Upstream `hexo-blog-encrypt` still encrypts whole posts, so a stock npm install does not understand them.
+The tag is available in the fork only. Upstream `hexo-blog-encrypt` still encrypts whole posts, so a stock npm install does not understand it.
 
 ## How it works
 
@@ -22,14 +21,14 @@ Public introduction.
 
 Still public.
 
-{% encrypt_nested "outer" "inner" %}
+{% encrypt "outer" "inner" %}
 **Two passwords are required.**
-{% endencrypt_nested %}
+{% endencrypt %}
 ```
 
 Hexo escapes tag bodies before the Markdown pass, so the plugin renders each body with the post's Markdown engine before encrypting it. Normal Markdown, fenced code blocks and HTML all work inside a block.
 
-The synchronous tags only emit an HTML-comment marker. Encryption runs in an `after_post_render` filter at priority 900, before whole-post encryption. This keeps build errors catchable: a bad block fails `hexo generate` instead of becoming an unhandled promise rejection.
+The synchronous tag only emits an HTML-comment marker. Encryption runs in an `after_post_render` filter at priority 900, before whole-post encryption. This keeps build errors catchable: a bad block fails `hexo generate` instead of becoming an unhandled promise rejection.
 
 ## Partial encryption
 
@@ -53,14 +52,14 @@ Each block gets its own fresh 32-byte salt and 12-byte nonce, even when `stableS
 
 ## Nested encryption
 
-### Explicit layers: `encrypt_nested`
+### Multiple passwords in one tag
 
 Pass one password per layer, outermost first:
 
 ```markdown
-{% encrypt_nested "outer-password" "inner-password" %}
+{% encrypt "outer-password" "inner-password" %}
 Only someone with both passwords can read this.
-{% endencrypt_nested %}
+{% endencrypt %}
 ```
 
 The reader sees the outer password prompt first. After it decrypts, the inner container appears and asks for the inner password. Add more arguments for more layers.
@@ -82,7 +81,7 @@ Only someone with both passwords can read this.
 {% endencrypt %}
 ```
 
-The block is encrypted first, then the whole post (including the block container) is encrypted by the normal `password:` filter. This is the same two-layer result as `encrypt_nested`, but the outer layer's prompt is the standard post password form.
+The block is encrypted first, then the whole post (including the block container) is encrypted by the normal `password:` filter. This is the same two-layer result as the multi-argument form, but the outer layer's prompt is the standard post password form.
 
 ### Nesting `{% encrypt %}` inside `{% encrypt %}`
 
@@ -104,13 +103,13 @@ Final secret.
 
 Inner widgets are stashed behind HTML-comment placeholders while the outer body goes through the Markdown engine, then restored. Without that, Markdown would convert the indented ciphertext inside `<script id="hbeData">` into `<br>` and break decryption.
 
-`{% encrypt %}` and `{% encrypt_nested %}` can also be nested in either order. `encrypt_nested` remains the shorter form when every layer is explicit; same-name nesting is the natural fit when each layer also contains public text.
+The multi-argument form and same-name nesting can be combined in either order. Use multiple arguments when the same body is locked by a chain of passwords; use nesting when each layer also shows public text.
 
 ## Rendering, assets and caching
 
 - Multiple encrypted containers on one page are supported by the merged upstream v4.1.0 browser runtime.
 - Each `{% encrypt %}` block appends its own copy of the bundle `<script>`; the runtime is idempotent and sets each container up exactly once. Browsers cache the script bytes.
-- A `{% encrypt_nested %}` block appends the script only to the outermost container.
+- A block with multiple password arguments appends the script only to its outermost container.
 - `autoSave` uses the container's position on the page. Reordering blocks invalidates that block's saved key; the salt check then drops the stale entry and prompts again.
 - Search indexes and feeds see the generated widget HTML (ciphertext), not the block plaintext. Public parts of a partial post are indexed normally.
 

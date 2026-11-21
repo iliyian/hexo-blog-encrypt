@@ -199,10 +199,9 @@ password: ""
 
 ### 部分加密与嵌套加密 (本 fork)
 
-本 fork 在上游 v4.1.0 的基础上增加了两个块级标签:
+本 fork 在上游 v4.1.0 的基础上增加了一个块级标签:
 
-- `{% encrypt "密码" %}` 只加密这个块, 文章其余部分保持公开.
-- `{% encrypt_nested "外层" "内层" ... %}` 按密码数量逐层加密, 第一个参数是最外层.
+- `{% encrypt "密码" ... %}` 只加密这个块, 文章其余部分保持公开. 多个密码参数会逐层加密, 第一个参数是最外层. 每层还需要自己的公开文字时, 也可以同名嵌套.
 
 ```markdown
 公开的开头.
@@ -211,12 +210,19 @@ password: ""
 **只有这个块会被加密.**
 {% endencrypt %}
 
-{% encrypt_nested "outer" "inner" %}
+{% encrypt "outer" "inner" %}
 **需要两层密码.**
-{% endencrypt_nested %}
+{% endencrypt %}
+
+{% encrypt "a" %}
+输入第一个密码后可见.
+{% encrypt "b" %}
+输入第二个密码后可见.
+{% endencrypt %}
+{% endencrypt %}
 ```
 
-块内容会先用文章对应的 Markdown 引擎渲染再加密; 一个页面可以有多个独立块; 还可以用文章级 `password:` 包住内层 `{% encrypt %}` 得到两层嵌套. 每个块使用独立随机 salt; 上游 npm 版本不支持这些标签. 详见 [部分加密与嵌套加密](https://github.com/iliyian/hexo-blog-encrypt/blob/master/wiki/Partial-and-Nested-Encryption-zh-CN.md).
+块内容会先用文章对应的 Markdown 引擎渲染再加密; 一个页面可以有多个独立块; 还可以用文章级 `password:` 包住内层 `{% encrypt %}` 得到两层嵌套. 每个块使用独立随机 salt; 上游 npm 版本不支持这个标签. 详见 [部分加密与嵌套加密](https://github.com/iliyian/hexo-blog-encrypt/blob/master/wiki/Partial-and-Nested-Encryption-zh-CN.md).
 
 ## 主题集成
 

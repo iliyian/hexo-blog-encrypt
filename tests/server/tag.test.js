@@ -158,22 +158,20 @@ test('{% encrypt %} rejects a missing password', async () => {
 
 test('parsePasswords rejects an explicitly empty password', () => {
   assert.throws(
-    () => _internal.parsePasswords([''], 'encrypt', 1, { title: 'T' }),
+    () => _internal.parsePasswords([''], 'encrypt', { title: 'T' }),
     /empty password in post "T"/
   );
   assert.throws(
-    () => _internal.parsePasswords([], 'encrypt_nested', 2, {}),
-    /requires at least 2 password arguments/
+    () => _internal.parsePasswords([], 'encrypt', {}),
+    /requires at least 1 password argument/
   );
 });
 
 // ---------------------------------------------------------------------------
-// {% encrypt_nested %} — explicit multi-layer encryption
+// Multiple password arguments — one layer per password, outermost first
 // ---------------------------------------------------------------------------
-test('{% encrypt_nested %} creates outer-first layers and only the outer has assets', async () => {
-  const html = await render(
-    '{% encrypt_nested "outer" "inner" %}' + SECRET + '{% endencrypt_nested %}'
-  );
+test('multiple password arguments create outer-first layers and only the outer has assets', async () => {
+  const html = await render('{% encrypt "outer" "inner" %}' + SECRET + '{% endencrypt %}');
 
   assert.equal((html.match(/hbe-container/g) || []).length, 1);
   assert.equal((html.match(/<script data-pjax/g) || []).length, 1);
@@ -188,23 +186,14 @@ test('{% encrypt_nested %} creates outer-first layers and only the outer has ass
   await assert.rejects(() => decryptPayload(outer, 'inner'));
 });
 
-test('{% encrypt_nested %} supports three layers', async () => {
-  const html = await render(
-    '{% encrypt_nested "a" "b" "c" %}' + SECRET + '{% endencrypt_nested %}'
-  );
+test('multiple password arguments support three layers', async () => {
+  const html = await render('{% encrypt "a" "b" "c" %}' + SECRET + '{% endencrypt %}');
   let layer = html;
   for (const password of ['a', 'b', 'c']) {
     const payload = extractPayload(layer);
     layer = await decryptPayload(payload, password);
   }
   assert.equal(layer, SECRET);
-});
-
-test('{% encrypt_nested %} requires at least two passwords', async () => {
-  await assert.rejects(
-    () => render('{% encrypt_nested "only-one" %}x{% endencrypt_nested %}'),
-    /requires at least 2 password/
-  );
 });
 
 test('tag errors include the post title when available', async () => {
@@ -320,7 +309,7 @@ test('processBlocks rejects valid base64 that decodes to invalid marker options'
 
 test('parsePasswords treats a non-array argument list as empty', () => {
   assert.throws(
-    () => _internal.parsePasswords(undefined, 'encrypt', 1, {}),
+    () => _internal.parsePasswords(undefined, 'encrypt', {}),
     /requires at least 1 password argument/
   );
 });
@@ -382,11 +371,11 @@ test('same-name {% encrypt %} nests three layers deep', async () => {
   assert.equal(layer, SECRET);
 });
 
-test('{% encrypt %} can wrap {% encrypt_nested %} and vice versa', async () => {
-  // encrypt -> encrypt_nested
+test('single- and multi-password {% encrypt %} blocks nest in either order', async () => {
+  // Single-password outer block containing a multi-password block.
   let layer = await render(
-    '{% encrypt "outer" %}PUBLIC2 {% encrypt_nested "a" "b" %}' + SECRET +
-    '{% endencrypt_nested %}{% endencrypt %}'
+    '{% encrypt "outer" %}PUBLIC2 {% encrypt "a" "b" %}' + SECRET +
+    '{% endencrypt %}{% endencrypt %}'
   );
   layer = await decryptPayload(extractPayload(layer), 'outer');
   assert.match(layer, /PUBLIC2/);
@@ -394,10 +383,10 @@ test('{% encrypt %} can wrap {% encrypt_nested %} and vice versa', async () => {
   layer = await decryptPayload(extractPayload(layer), 'b');
   assert.equal(layer, SECRET);
 
-  // encrypt_nested -> encrypt
+  // Multi-password outer block containing a single-password block.
   layer = await render(
-    '{% encrypt_nested "outer" "second" %}PUBLIC2 {% encrypt "inner" %}' + SECRET +
-    '{% endencrypt %}{% endencrypt_nested %}'
+    '{% encrypt "outer" "second" %}PUBLIC2 {% encrypt "inner" %}' + SECRET +
+    '{% endencrypt %}{% endencrypt %}'
   );
   layer = await decryptPayload(extractPayload(layer), 'outer');
   layer = await decryptPayload(extractPayload(layer), 'second');

@@ -207,10 +207,9 @@ password: ""
 
 ### Partial and nested encryption (this fork)
 
-This fork adds two block-level tags on top of upstream v4.1.0:
+This fork adds one block-level tag on top of upstream v4.1.0:
 
-- `{% encrypt "password" %}` encrypts only that block; the rest of the post stays public.
-- `{% encrypt_nested "outer" "inner" ... %}` encrypts the block once per password, outermost first.
+- `{% encrypt "password" ... %}` encrypts only that block; the rest of the post stays public. Multiple password arguments add layers, outermost first. Same-name blocks can also be nested when each layer needs its own public text.
 
 ```markdown
 Public introduction.
@@ -219,9 +218,16 @@ Public introduction.
 **Only this block is encrypted.**
 {% endencrypt %}
 
-{% encrypt_nested "outer" "inner" %}
+{% encrypt "outer" "inner" %}
 **Two passwords are required.**
-{% endencrypt_nested %}
+{% endencrypt %}
+
+{% encrypt "a" %}
+Seen after the first password.
+{% encrypt "b" %}
+Seen after the second password.
+{% endencrypt %}
+{% endencrypt %}
 ```
 
 The block body is rendered with the post's Markdown engine before encryption, several independent blocks may share a page, and a post-level `password:` can wrap an inner `{% encrypt %}` block for a two-layer result. Fresh random salt per block; not supported by the upstream npm release. See [Partial and Nested Encryption](https://github.com/iliyian/hexo-blog-encrypt/blob/master/wiki/Partial-and-Nested-Encryption.md).

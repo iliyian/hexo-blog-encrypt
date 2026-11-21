@@ -1,8 +1,8 @@
 'use strict';
 
 // Block-level tags (fork addition):
-//   {% encrypt %}         — partial encryption, one password per block
-//   {% encrypt_nested %}  — one password per layer, outermost first
+//   {% encrypt %} — partial encryption; multiple arguments add layers,
+//                   outermost password first
 //
 // These tests exercise the real Hexo build of tests/fixtures/hexo-site. The
 // fixtures are materialized by tests/helpers/buildSite.js from

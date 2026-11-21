@@ -2,12 +2,11 @@
 
 [English](Partial-and-Nested-Encryption)
 
-本 fork 在上游 v4.1.0 的基础上增加了两个块级标签:
+本 fork 在上游 v4.1.0 的基础上增加了一个块级标签:
 
-- `{% encrypt "密码" %}` 只加密**这个块**, 文章其余部分保持公开.
-- `{% encrypt_nested "外层" "内层" ... %}` 按密码数量逐层加密, 第一个参数是最外层.
+- `{% encrypt "密码" ... %}` 只加密**这个块**, 文章其余部分保持公开. 多个密码参数会逐层加密, 第一个参数是最外层; 每层还需要自己的公开文字时, 也可以同名嵌套.
 
-这两个标签只存在于本 fork. 上游 `hexo-blog-encrypt` 仍然只支持整篇加密, 直接安装 npm 版本不会识别它们.
+这个标签只存在于本 fork. 上游 `hexo-blog-encrypt` 仍然只支持整篇加密, 直接安装 npm 版本不会识别它.
 
 ## 工作原理
 
@@ -22,9 +21,9 @@
 
 仍然是公开的.
 
-{% encrypt_nested "outer" "inner" %}
+{% encrypt "outer" "inner" %}
 **需要两层密码.**
-{% endencrypt_nested %}
+{% endencrypt %}
 ```
 
 Hexo 会在 Markdown 渲染前转义标签内容, 所以插件会先用文章对应的 Markdown 引擎渲染块内容, 再执行加密. 普通 Markdown、围栏代码块和 HTML 都可以写在块内.
@@ -53,14 +52,14 @@ Hexo 会在 Markdown 渲染前转义标签内容, 所以插件会先用文章对
 
 ## 嵌套加密
 
-### 显式分层: `encrypt_nested`
+### 一个标签内多个密码
 
 每层一个密码, 最外层在前:
 
 ```markdown
-{% encrypt_nested "outer-password" "inner-password" %}
+{% encrypt "outer-password" "inner-password" %}
 只有同时知道两个密码的人才能读到这段.
-{% endencrypt_nested %}
+{% endencrypt %}
 ```
 
 读者先看到外层密码框. 外层解密后, 内层容器出现并索要内层密码. 继续增加参数即可增加层数.
@@ -82,7 +81,7 @@ password: outer-password
 {% endencrypt %}
 ```
 
-插件先加密块, 再由正常的 `password:` 过滤器加密整篇文章 (包括块容器). 效果和 `encrypt_nested` 的两层嵌套相同, 只是外层提示使用的是标准文章密码表单.
+插件先加密块, 再由正常的 `password:` 过滤器加密整篇文章 (包括块容器). 效果和多参数形式的两层嵌套相同, 只是外层提示使用的是标准文章密码表单.
 
 ### `{% encrypt %}` 嵌套 `{% encrypt %}`
 
@@ -104,13 +103,13 @@ password: outer-password
 
 外层块内容交给 Markdown 引擎之前, 内层控件会先换成 HTML 注释占位符, 渲染后再还原. 否则 Markdown 会把 `<script id="hbeData">` 里缩进的密文变成 `<br>`, 导致解密失败.
 
-`{% encrypt %}` 和 `{% encrypt_nested %}` 也可以互相嵌套. 所有层都是显式密码时 `encrypt_nested` 更简短; 每层还需要公开文字时, 同名嵌套更自然.
+多参数形式和同名嵌套也可以互相组合. 同一段内容用一串密码锁住时, 多参数更简短; 每层还需要展示公开文字时, 同名嵌套更自然.
 
 ## 渲染、资源与缓存
 
 - 合并后的上游 v4.1.0 浏览器运行时支持一页多个加密容器.
 - 每个 `{% encrypt %}` 块都会追加一份 bundle `<script>`; 运行时是幂等的, 每个容器只会初始化一次, 浏览器也会缓存脚本内容.
-- `{% encrypt_nested %}` 只把脚本追加到最外层容器.
+- 带多个密码参数的块只把脚本追加到最外层容器.
 - `autoSave` 按容器在页面中的位置保存密钥. 调整块顺序会让对应密钥失效; salt 校验会丢弃过期条目并重新提示.
 - 搜索索引和 feed 看到的是生成的控件 HTML (密文), 不会包含块内明文. 部分加密文章中公开的部分会正常被索引.
 

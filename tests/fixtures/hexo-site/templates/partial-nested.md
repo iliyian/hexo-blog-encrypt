@@ -11,8 +11,8 @@ PUBLIC BEFORE
 
 PUBLIC MIDDLE
 
-{% encrypt_nested "outer" "inner" %}
+{% encrypt "outer" "inner" %}
 **NESTED SECRET**
-{% endencrypt_nested %}
+{% endencrypt %}
 
 PUBLIC AFTER
