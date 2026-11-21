@@ -6,7 +6,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const BUNDLE_PATH = path.resolve(__dirname, '../../lib/hbe.bundle.js');
-const MAX_BYTES = 8192;
+// This fork keeps Argon2id support (hash-wasm) on top of upstream v4.1.0's
+// multi-container runtime. hash-wasm embeds its WASM payload in the bundle,
+// so the PBKDF2-only upstream budget (10 KiB) does not apply. The 240 KiB
+// ceiling leaves headroom for the merged browser code and fails if the
+// bundle grows unexpectedly.
+const MAX_BYTES = 245760;
 
 if (!fs.existsSync(BUNDLE_PATH)) {
   test.skip('lib/hbe.bundle.js missing — run `npm run build` first');

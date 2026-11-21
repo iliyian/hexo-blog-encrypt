@@ -8,10 +8,13 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const DEFAULT_FIXTURE = path.join(REPO_ROOT, 'tests', 'fixtures', 'hexo-site');
 const TEMPLATE_REL = path.join('templates', 'encrypted-post.md');
 const AUTOSAVE_TEMPLATE_REL = path.join('templates', 'autosave-post.md');
+const STABLESALT_TEMPLATE_REL = path.join('templates', 'stablesalt-post.md');
 const TAG_ONLY_TEMPLATE_REL = path.join('templates', 'tag-encrypted-post.md');
 const CALLBACK_TEMPLATE_REL = path.join('templates', 'callback-post.md');
 const NON_ASCII_BUTTON_TEMPLATE_REL = path.join('templates', 'non-ascii-button-post.md');
 const HIDDEN_BUTTON_TEMPLATE_REL = path.join('templates', 'hidden-button-post.md');
+const MULTI_POST_TEMPLATES = ['multi-post-alpha.md', 'multi-post-bravo.md'];
+const PARTIAL_NESTED_TEMPLATES = ['partial-nested.md', 'post-nested.md'];
 const POSTS_REL = path.join('source', '_posts');
 
 /**
@@ -78,6 +81,18 @@ function materializePosts(fixtureDir, themes) {
   fs.writeFileSync(autosaveDest, autosaveBody, 'utf8');
   written.push(autosaveDest);
 
+  // Single stableSalt-on post (default theme only) — used by the
+  // stableSalt clean-rebuild e2e regression. Combines `autoSave: true`
+  // with `stableSalt: true` so the e2e can prove that a key cached from
+  // a previous build still auto-decrypts a fresh nonce/ciphertext as
+  // long as the (permalink-derived) salt is unchanged.
+  const stableSaltTemplatePath = path.join(fixtureDir, STABLESALT_TEMPLATE_REL);
+  const stableSaltBody = fs.readFileSync(stableSaltTemplatePath, 'utf8')
+    .split('__THEME__').join('default');
+  const stableSaltDest = path.join(postsDir, 'stablesalt-default.md');
+  fs.writeFileSync(stableSaltDest, stableSaltBody, 'utf8');
+  written.push(stableSaltDest);
+
   // Single tag-only-encrypted post (default theme) — no front-matter
   // password; encryption is driven by `_config.yml.encrypt.tags`. This
   // post is the e2e regression for the Hexo-Warehouse-Query path through
@@ -109,6 +124,27 @@ function materializePosts(fixtureDir, themes) {
   const hiddenButtonDest = path.join(postsDir, 'hidden-button-default.md');
   fs.writeFileSync(hiddenButtonDest, hiddenButtonBody, 'utf8');
   written.push(hiddenButtonDest);
+
+  // Two posts with different passwords, rendered together in full by the
+  // `multi-posts` fixture page (source/multi-posts/index.md). That page
+  // carries two encrypted wrappers and two bundle <script> tags — the
+  // multi-post / bundle-executed-twice regression (#246).
+  for (const name of MULTI_POST_TEMPLATES) {
+    const body = fs.readFileSync(path.join(fixtureDir, 'templates', name), 'utf8');
+    const dest = path.join(postsDir, name);
+    fs.writeFileSync(dest, body, 'utf8');
+    written.push(dest);
+  }
+
+  // Block-level tags: one partial post (two independent blocks + one
+  // explicit nested block) and one post whose front-matter password wraps
+  // an inner `{% encrypt %}` block.
+  for (const name of PARTIAL_NESTED_TEMPLATES) {
+    const body = fs.readFileSync(path.join(fixtureDir, 'templates', name), 'utf8');
+    const dest = path.join(postsDir, name);
+    fs.writeFileSync(dest, body, 'utf8');
+    written.push(dest);
+  }
 
   return written;
 }

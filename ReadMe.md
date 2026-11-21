@@ -1,149 +1,102 @@
 # hexo-blog-encrypt
 
+> Password-protect individual Hexo posts. Content is encrypted at build time
+> with AES-256-GCM and decrypted in the reader's browser with the Web Crypto
+> API. No server, no plaintext in the generated HTML.
+
+**[▶ Live demo](https://d0n9x1n.github.io/hexo-blog-encrypt/)**: every demo password is `hello`.
+
 [![GitHub release](https://img.shields.io/github/v/release/D0n9X1n/hexo-blog-encrypt?include_prereleases&logo=github&label=release&color=brightgreen)](https://github.com/D0n9X1n/hexo-blog-encrypt/releases)
 [![npm](https://img.shields.io/npm/v/hexo-blog-encrypt?logo=npm&color=brightgreen)](https://www.npmjs.com/package/hexo-blog-encrypt)
 [![npm downloads](https://img.shields.io/npm/dm/hexo-blog-encrypt?logo=npm&label=downloads)](https://www.npmjs.com/package/hexo-blog-encrypt)
 [![License](https://img.shields.io/npm/l/hexo-blog-encrypt?color=brightgreen)](./LICENSE)
 [![Tests](https://github.com/D0n9X1n/hexo-blog-encrypt/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/D0n9X1n/hexo-blog-encrypt/actions/workflows/test.yml)
+[![Coverage](https://img.shields.io/badge/server%20coverage-100%25-brightgreen)](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Development)
 [![Live Demo](https://img.shields.io/badge/demo-online-brightgreen?logo=github)](https://d0n9x1n.github.io/hexo-blog-encrypt/)
+[![Node](https://img.shields.io/node/v/hexo-blog-encrypt?logo=node.js&color=brightgreen)](./package.json)
+[![Hexo](https://img.shields.io/npm/dependency-version/hexo-blog-encrypt/peer/hexo?logo=hexo&label=hexo)](https://hexo.io/)
+[![Dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](./package.json)
+[![npm provenance](https://img.shields.io/badge/npm-provenance-blue?logo=npm)](https://www.npmjs.com/package/hexo-blog-encrypt#provenance)
+[![GitHub stars](https://img.shields.io/github/stars/D0n9X1n/hexo-blog-encrypt?style=flat&logo=github)](https://github.com/D0n9X1n/hexo-blog-encrypt/stargazers)
 
-[中文说明](./ReadMe.zh.md)
+English · [中文说明](./ReadMe.zh.md) · [Wiki](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki) · [Releases](https://github.com/D0n9X1n/hexo-blog-encrypt/releases)
 
-## What's this
+## Contents
 
-- ~~First of all, the **BEST** post encryption plugin in the universe for hexo.(But what about the other plugins?)~~
+- [Highlights](#highlights)
+- [Live demo](#live-demo)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Theme integration](#theme-integration)
+- [Browser support](#browser-support)
+- [Contributing](#contributing)
+- [License](#license)
 
-- It is for those who write a post, but don't want everyone to read it. Thus, password is required in certain pages to access these encrypted posts.
+## Highlights
 
-- Encryption is simple on wordpress, emlog or other blog systems, except hexo. :(
+| | |
+| --- | --- |
+| **Authenticated encryption** | [PBKDF2](https://www.rfc-editor.org/rfc/rfc8018)-SHA256 key derivation and [AES-256-GCM](https://csrc.nist.gov/pubs/sp/800/38/d/final). The GCM tag rejects wrong passwords and tampered ciphertext. |
+| **Native crypto only** | Node.js [`crypto`](https://nodejs.org/api/crypto.html) at build time, the browser [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) at read time. No runtime dependencies. |
+| **Per-post keys** | Each post has its own 32-byte salt and 12-byte nonce, so one cracked post does not speed up attacks on the others. |
+| **Front-matter or tag passwords** | Set `password:` on a post, or map tags to passwords in `_config.yml`. |
+| **Eight themes** | `default`, `blink`, `flip`, `shrink`, `surge`, `up`, `wave`, `xray`. Add your own by dropping in one HTML file. |
+| **Scripts keep working** | Scripts inside a decrypted post run in document order. A `hexo-blog-decrypt` event fires when the post is revealed. |
+| **Privacy by default** | Passwords and keys are not stored unless you opt in with `autoSave`. |
+| **Claude Code skill** | [`hexo-encrypt-toc`](https://github.com/D0n9X1n/hexo-blog-encrypt/blob/master/skills/hexo-encrypt-toc/SKILL.md) fixes any theme's table of contents for encrypted posts without leaking headings. |
+| **Tested** | 100% server line, branch and function coverage, plus Playwright end-to-end tests across every theme. |
 
-- So it's "hexo-blog-encrypt"'s time.
+## Live demo
 
-## Features
+Open the **[demo site](https://d0n9x1n.github.io/hexo-blog-encrypt/)**. All passwords are `hello`.
 
-- Once you enter the correct password, the encrypted post is decrypted client-side. By default the password is **not** persisted; opt in with `autoSave: true` (per-post or in `_config.yml`) to have a derived key cached in `localStorage` so a subsequent reload of the same page auto-decrypts. If there are scripts in the post, they will be executed once the post is decrypted.
-
-- Support preset tag-specified password.
-
-- All functions are provided by the native APIs. We use [Crypto](https://nodejs.org/dist/latest-v12.x/docs/api/crypto.html) in Node.js, and use [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) in Browsers.
-
-- [PBKDF2](https://tools.ietf.org/html/rfc2898) with [SHA-256](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf) is used to derive keys, and we use [AES-256-GCM](https://csrc.nist.gov/publications/detail/sp/800-38d/final) for both encryption and authenticated decryption — the GCM auth tag detects any modification of the ciphertext (replacing the v3 separate HMAC step).
-
-- Promise is widely used to make sure our main procedures are asynchronous, so that there is little chance for the process to be blocked, and the experience will be more fluent.
-
-- Template theme supported, you can use [`default`, `blink`, `flip`, `shrink`, `surge`, `up`, `wave`, `xray`] to set up your template theme, and [CHECK ONLINE](https://d0n9x1n.github.io/hexo-blog-encrypt/tags/theme-demo/).
-
-- Outdated browsers may not work well. In such case, please upgrade your browser.
-
-## Online demo
-
-- See [Demo Page](https://d0n9x1n.github.io/hexo-blog-encrypt/), **all passwords are `hello`**.
-
-## Browser support
-
-The runtime uses Web Crypto (`crypto.subtle`), which requires a **secure
-context** (HTTPS or `http://localhost`). Verified:
-
-| Browser | Minimum | Notes |
-| --- | --- | --- |
-| Chromium / Edge | 92+ | Tested in CI via Playwright |
-| Firefox | 90+ | |
-| Safari (macOS / iOS) | 14+ | Manual smoke at release time |
-
-If your site is served over plain HTTP from a non-localhost host,
-decryption will silently fail (`crypto.subtle` is `undefined`). Always
-use HTTPS in production.
-
-## Why upgrade from v3?
-
-v4 isn't a cosmetic refresh — it closes real security gaps and fixes UX
-problems v3 had. The headline reasons:
-
-- **Stronger crypto.** **AES-256-GCM** with a built-in authentication
-  tag replaces v3's AES-CBC + separate HMAC. One primitive, one auth
-  path, hardware-accelerated, and immune to a class of CBC
-  padding-oracle and HMAC-comparison bugs.
-- **Per-post salt + nonce.** v3 used the same salt for every post, so
-  the same password derived the same key everywhere. v4 derives an
-  independent key per post — an attacker can't amortize one password's
-  PBKDF2 work across other posts that share the password.
-- **Stronger KDF defaults.** v3 used **1,024** PBKDF2-SHA256 iterations
-  — far below current recommendations and easily amortized across many
-  guesses on modern hardware. v4 defaults to **250,000** (≈ 240× more
-  work per guess) and recommends 600,000+ (OWASP 2023). Tunable per
-  post via `kdf.iterations`.
-- **Privacy by default.** v3 always cached decrypted posts in
-  `localStorage`, so anyone with subsequent device access could
-  re-read them. v4 defaults to `autoSave: false`; you opt in per post
-  or globally.
-- **Inline error messages.** v3 fired a `window.alert()` dialog on a
-  wrong password — disruptive, especially on mobile. v4 shows the
-  error inline next to the password field (`role="alert"`).
-- **Optional click-to-decrypt button.** Discoverable for visitors who
-  don't realise Enter submits the form. Label is configurable.
-- **Smaller bundle.** Drops the bundled CryptoJS dependency in
-  favour of the browser's native Web Crypto API. The shipped browser
-  bundle is ≈ 6 KB minified.
-- **Tested.** Server suite at 100 % line / branch / function coverage
-  + Playwright e2e across all 8 themes. v3 had effectively zero
-  automated tests; v4 is regression-guarded on every push.
-
-If you care about offline password guessing against your generated
-HTML, or about shared-device exposure of cached keys — upgrade.
-
-The deeper rationale per change lives on the wiki:
-[Migration v3 → v4](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Migration-v3-to-v4).
-
-## Upgrading from v3
-
-v4 changed the wire format (AES-GCM, per-post salt + nonce). Existing
-encrypted output cannot be read by v4 and vice versa, so:
-
-1. Upgrade the plugin: `npm install --save hexo-blog-encrypt@^4`.
-2. Rebuild from source: `hexo clean && hexo generate`.
-3. Purge your CDN if you use one (the post HTML changes byte-for-byte
-   on every build by design — fresh nonce per encryption — but the
-   runtime asset URL `lib/hbe.<hash>.js` is content-hashed and only
-   changes when the bundle changes).
-4. Optional: drop `wrong_hash_message` from your config and front-matter
-   (deprecated in v4, removed in v5).
-
-No source `.md` files are touched. See [CHANGELOG.md](./CHANGELOG.md)
-for the full breaking-changes list and the new `decryptButton` /
-`autoSave` / `kdf.iterations` options.
+- [Theme gallery](https://d0n9x1n.github.io/hexo-blog-encrypt/tags/theme-demo/)
+- [Decrypt callback](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/callback/)
+- [Script loading order and cached keys](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/script-order/)
 
 ## Install
 
-- `npm install --save hexo-blog-encrypt`
+```bash
+npm install --save hexo-blog-encrypt
+```
 
-- or `yarn add hexo-blog-encrypt` (require [Yarn](https://yarnpkg.com/en/))
+Requires Node.js 18 or later and Hexo 5 or later. The package is published to
+npm with [provenance](https://docs.npmjs.com/generating-provenance-statements)
+and mirrored to GitHub Packages as `@d0n9x1n/hexo-blog-encrypt`.
 
 ## Quick start
 
-- Add the "password" value to your post's front matter like:
+Add a `password` to a post's front matter:
 
 ```markdown
-
 ---
 title: Hello World
 date: 2016-03-30 21:18:02
 password: hello
 ---
-
 ```
 
-- Then use `hexo clean && hexo g && hexo s` to see your encrypted post locally.
+Then rebuild and preview:
 
-## Password Priority
+```bash
+hexo clean && hexo generate && hexo server
+```
 
-post's front matter > encrypt tags
+The post body is replaced by a password form. Index pages show the `abstract`
+text instead of the content.
 
-## Advanced settings
+## Configuration
 
-### in post's front matter
+Settings are resolved in this order:
+
+**post front matter > `_config.yml` `encrypt:` block > built-in defaults**
+
+A front-matter `password` takes precedence over a tag password.
+
+### Front matter
 
 ```markdown
-
 ---
 title: Hello World
 tags:
@@ -153,193 +106,260 @@ password: mikemessi
 abstract: Here's something encrypted, password is required to continue reading.
 message: Hey, password is required here.
 wrong_pass_message: Oh, this is an invalid password. Check and try again, please.
-# Deprecated under v4 — AES-GCM unifies wrong-password and tampered-ciphertext
-# failures, so this option is now an alias of `wrong_pass_message`. Set
-# `wrong_pass_message` instead.
-wrong_hash_message: Oh, these decrypted content cannot be verified, but you can still have a look.
+theme: xray
 ---
-
 ```
 
-### In `_config.yml`
-
-#### Example
+### Site-wide `_config.yml`
 
 ```yaml
-# Security
 encrypt: # hexo-blog-encrypt
   abstract: Here's something encrypted, password is required to continue reading.
   message: Hey, password is required here.
+  wrong_pass_message: Oh, this is an invalid password. Check and try again, please.
+  theme: default
+  silent: false
+
+  # Encrypt every post that carries one of these tags.
   tags:
   - {name: encryptAsDiary, password: passwordA}
   - {name: encryptAsTips, password: passwordB}
-  wrong_pass_message: Oh, this is an invalid password. Check and try again, please.
-  # Deprecated under v4 (alias of `wrong_pass_message`). See note above.
-  wrong_hash_message: Oh, these decrypted content cannot be verified, but you can still have a look.
 
-  # ── v4 keys (all optional, safe defaults) ────────────────────────────
-  # Render a visible "Decrypt" button next to the password field.
-  # Themes that already include a button via `<%- decrypt_button %>`
-  # ignore this option. Default: true.
+  # Show a visible "Decrypt" button next to the password field.
+  # Default: true.
   decryptButton:
     show: true
     text: Decrypt
 
-  # Cache the decrypted plaintext in localStorage so reloads skip the
-  # password prompt. OFF by default — opt in per post via front-matter
-  # `autoSave: true`, or globally here. Cache key is namespaced under
-  # `hbe.v4.<post-permalink-hash>`.
+  # Cache the derived AES key in localStorage so reloads skip the password
+  # prompt. Default: false. Enable globally here or per post in front matter.
+  # Entries are stored under `hbe.v4.<page path>`.
   autoSave: false
 
-  # PBKDF2 iteration count. Floor: 100_000. Recommended ≥ 600_000
-  # (OWASP 2023 for PBKDF2-SHA256). Lower-than-recommended values log a
-  # warning at build time. Default: 250_000.
+  # Keep the PBKDF2 salt stable across clean builds for the same post
+  # permalink. Default: false. Useful with autoSave on Cloudflare Pages,
+  # Vercel, Netlify, GitHub Actions, and other platforms that rebuild
+  # generated HTML from a clean environment on every deploy.
+  #
+  # Only the salt is stable. The AES-GCM nonce stays random for every
+  # encryption to avoid nonce reuse. If the post permalink changes, the
+  # stable salt changes too, and the page's existing localStorage cache is
+  # invalidated.
+  stableSalt: false
+
+  # PBKDF2 iteration count. Floor: 100_000. Recommended: 600_000 or more
+  # (OWASP 2023 for PBKDF2-SHA256). Values below the recommendation log a
+  # build warning. Default: 250_000.
   kdf:
     iterations: 250000
-
 ```
 
-#### To disable tag encryption
+When `autoSave` reads a cached key, it compares the cached salt with the
+current page salt. A nonce change alone does not delete the cache up front;
+the browser tries the cached key with the current page nonce and ciphertext.
+If AES-GCM authentication fails, the cache entry is cleared and the visitor is
+asked for the password again.
 
-Just set the `password` property in front matter to `""`.
+**Saved keys and their exposure.** A saved key lives in `localStorage` under
+`hbe.v4.<page path>` and unlocks that post on this device until it is removed.
+Any script running on the same origin (your theme, analytics, comment
+widgets, or an injected script) can read it, so enable `autoSave` only when
+you trust every script on the site. After a post is revealed with a saved
+key, a **Forget saved key** button above it deletes the entry. Turning
+`autoSave` off for a post deletes that post's saved key on the next visit,
+and leftover v3 `hexo-blog-encrypt:#…` entries are removed automatically.
 
-Example:
+### Option reference
 
-```
+| Option | Default | Description |
+| --- | --- | --- |
+| `password` | none | Encrypts the post. `""` disables encryption, including tag encryption. A matching tag entry without a password fails the build. |
+| `password: { env: NAME }` | none | Reads the password from environment variable `NAME` at build time (front matter, `encrypt.password` or `encrypt.tags[].password`). A missing or empty variable fails the build; the value is never logged or rendered. This keeps passwords out of config files, not out of plaintext Markdown you commit publicly. |
+| `abstract` | `Here's something encrypted…` | Excerpt shown on index and archive pages. |
+| `message` | `Hey, password is required here.` | Label of the password field. |
+| `wrong_pass_message` | `Oh, this is an invalid password…` | Inline error after a failed attempt. |
+| `theme` | `default` | One of the eight bundled themes. Unknown names fall back to `default` with a warning. |
+| `tags` | `[]` | `_config.yml` only. `{name, password}` pairs for tag encryption. |
+| `decryptButton.show` / `.text` | `true` / `Decrypt` | Visible submit button and its label. |
+| `autoSave` | `false` | Cache the derived key in `localStorage`. |
+| `stableSalt` | `false` | Derive the salt from the permalink so cached keys survive clean rebuilds. |
+| `kdf.iterations` | `250000` | PBKDF2 iterations. Must be an integer of at least 100,000. |
+| `silent` | `false` | Suppress build-time info logs. Warnings and errors still print. |
+| `wrong_hash_message` | `wrong_pass_message` | Deprecated alias. AES-GCM reports wrong passwords and tampering the same way. |
+| `template` | none | Deprecated alias of `theme`. |
+
+Boolean options (`autoSave`, `stableSalt`, `silent`, `decryptButton.show`) must be `true` or `false`. Quoted `"true"`/`"false"` are accepted with a warning; any other value fails the build.
+
+The default `abstract`, `message`, `wrong_pass_message` and `decryptButton.text` follow the post's `lang`/`language`, else the site `language`. `zh`, `zh-CN` and `zh-Hans` use Simplified Chinese; everything else uses English. Explicit values always win.
+
+### Disable tag encryption for one post
+
+Set an empty password in that post's front matter:
+
+```markdown
 ---
-title: Callback Test
-date: 2019-12-21 11:54:07
+title: Public post with an encrypted tag
 tags:
     - A Tag should be encrypted
 password: ""
 ---
-
-Use a "" to disable tag encryption.
 ```
 
-### Config priority
+### Partial and nested encryption (this fork)
 
-post's front matter > `_config.yml` (in the root directory) > default
+This fork adds two block-level tags on top of upstream v4.1.0:
 
-### About Callback
-In some blogs, some elements may not be displayed normally after decryption. This is a known issue. The current solution is to check the code in your blog to learn which functions are called when the onload event occurs.
-Then write these code at the end of your post. For example:
+- `{% encrypt "password" %}` encrypts only that block; the rest of the post stays public.
+- `{% encrypt_nested "outer" "inner" ... %}` encrypts the block once per password, outermost first.
 
+```markdown
+Public introduction.
+
+{% encrypt "block-secret" %}
+**Only this block is encrypted.**
+{% endencrypt %}
+
+{% encrypt_nested "outer" "inner" %}
+**Two passwords are required.**
+{% endencrypt_nested %}
 ```
----
-title: Callback Test
-date: 2019-12-21 11:54:07
-tags:
-    - Encrypted
----
 
-This is a blog to test Callback functions. You just need to add code at the end of your post as follows:
+The block body is rendered with the post's Markdown engine before encryption, several independent blocks may share a page, and a post-level `password:` can wrap an inner `{% encrypt %}` block for a two-layer result. Fresh random salt per block; not supported by the upstream npm release. See [Partial and Nested Encryption](https://github.com/iliyian/hexo-blog-encrypt/blob/master/wiki/Partial-and-Nested-Encryption.md).
 
-It will be called after the blog is decrypted.
+## Theme integration
 
+### After-decrypt event
+
+The plugin dispatches `hexo-blog-decrypt` once on `window` after each post is
+revealed. `event.detail.mode` is `manual` (password entered) or `cached`
+(saved key), and `event.detail.element` is the revealed container (useful when
+an index page shows several encrypted posts). Listen for it to re-run anything
+that scans the post body:
+
+```js
+window.addEventListener('hexo-blog-decrypt', function (event) {
+  // Reinitialize your theme's table of contents, syntax highlighting, etc.
+  console.log('Decrypted:', event.detail.mode, event.detail.element);
+});
+```
+
+### PJAX and SPA themes
+
+The bundle initializes every encrypted post on the page once. It re-scans
+automatically on `pjax:complete`, `pjax:success`, `swup:contentReplaced` and
+`turbo:load` (dispatched on `document`). For other routers, call the idempotent
+initializer after swapping content:
+
+```js
+window.hexoBlogEncrypt.init();          // whole document
+window.hexoBlogEncrypt.init(container); // only a subtree
+```
+
+### Scripts inside encrypted posts
+
+Scripts in a post run after it is decrypted. Since **4.0.3**, ordinary external
+scripts load in document order before later inline scripts run, so
+library-dependent code such as DPlayer initializes correctly. The decrypt event
+waits until restored external scripts load, fail, or reach a **15-second
+per-script deadline**. A timeout does not cancel a script; it can still execute
+later. Existing `onload` and `onerror` handlers are preserved. Explicit `async`
+scripts still load independently, and restored `defer` scripts do not recreate a
+document parsing phase. Inline `type="module"` scripts and asynchronous work
+inside scripts keep native scheduling and may finish after the decrypt event.
+
+```markdown
 <script>
-    // add script tag and code at the end of your post
-    alert("Hello World");
+  // Runs after this post is decrypted.
+  console.log('Hello from an encrypted post');
 </script>
 ```
 
-Demo: [Callback Example](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/callback/).
+### Table of contents
 
-### After Decrypt Event
-Thanks to @[f-dong](https://github.com/f-dong), we now will trigger a event named `hexo-blog-decrypt`, so you can add a call back to listen to that event.
+**Never render an encrypted post's `post.origin` into generated HTML.** It
+holds plaintext for legacy Hexo integrations. A TOC hidden with
+`display:none` still publishes its headings. Search, feed and sitemap
+integrations must also exclude plaintext fields from encrypted posts.
 
-```
-// trigger event
-var event = new Event('hexo-blog-decrypt');
-window.dispatchEvent(event);
-```
+Render a server-side TOC only for unencrypted posts:
 
-### Encrypt TOC
-
-If you has a post with TOC, you should change the code of your template. Take the default theme 'landscape' as an example:
-
-+ You should find the `article.ejs` file located at `hexo/themes/landscape/layout/_partial/article.ejs`.
-+ Find the code like <% post.content %>, which is usually at line 30.
-+ Replace the <% post.content %> with the following code block:
-
-```
-<% if(post.toc == true){ %>
-  <div id="toc-div" class="toc-article" <% if (post.encrypt == true) { %>style="display:none" <% } %>>
-    <strong class="toc-title">Index</strong>
-      <% if (post.encrypt == true) { %>
-        <%- toc(post.origin, {list_number: true}) %>
-      <% } else { %>
-        <%- toc(post.content, {list_number: true}) %>
-      <% } %>
-  </div>
+```ejs
+<% if (post.toc === true && !post.encrypt) { %>
+  <div class="toc-article"><%- toc(post.content, {list_number: true}) %></div>
 <% } %>
 <%- post.content %>
 ```
 
-### Disable logging
-If you want to disable the logging, you can add a silent property in `_config.yml` and set it to true.
+For encrypted posts, build the TOC in the browser inside the
+`hexo-blog-decrypt` handler from the revealed `#hexo-blog-encrypt` content.
 
-```yaml
-# Security
-encrypt: # hexo-blog-encrypt
-  silent: true
+#### Let Claude Code fix your theme
+
+The [`hexo-encrypt-toc`](https://github.com/D0n9X1n/hexo-blog-encrypt/blob/master/skills/hexo-encrypt-toc/SKILL.md) skill does this for any Hexo theme: it finds
+the theme's TOC, removes plaintext sources, rebuilds the TOC after decryption,
+and runs a leak check on the generated site. It is a single file. Save it as a
+[Claude Code](https://claude.com/claude-code) skill:
+
+```bash
+mkdir -p ~/.claude/skills/hexo-encrypt-toc
+curl -fsSL https://raw.githubusercontent.com/D0n9X1n/hexo-blog-encrypt/master/skills/hexo-encrypt-toc/SKILL.md \
+  -o ~/.claude/skills/hexo-encrypt-toc/SKILL.md
 ```
 
-This would disable the logging like `INFO  hexo-blog-encrypt: encrypting "{Blog Name}" based on Tag: "EncryptedTag".`.
+Then, in your blog's directory, ask Claude Code to *"fix the TOC for encrypted
+posts in my theme"* or run `/hexo-encrypt-toc`. Details:
+[wiki: Encrypted TOC](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Encrypted-TOC).
 
-### Encrypt Theme
-Previously, we use `template` to let users modify their own themes. Turn out that it's not a simple way. So, we are introducing this feature here.
+### Encryption themes
 
-You can simply use `theme` in `_config.yml` or in header like:
+Pick a theme per post with `theme:` in front matter, or for the whole site in
+`_config.yml`. Preview each one:
 
-#### In post's front matter
+[default](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/default/) ·
+[blink](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/blink/) ·
+[flip](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/flip/) ·
+[shrink](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/shrink/) ·
+[surge](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/surge/) ·
+[up](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/up/) ·
+[wave](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/wave/) ·
+[xray](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/xray/)
 
-```markdown
----
-title: Theme test
-date: 2019-12-21 11:54:07
-tags:
-    - A Tag should be encrypted
-theme: xray
-password: "hello"
----
-```
+To add a theme, see [Theme Authoring](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Theme-Authoring).
 
-#### In `_config.yml`
+## Browser support
 
-This would be a default one.
+Decryption uses Web Crypto (`crypto.subtle`), which requires a **secure
+context**: HTTPS or `http://localhost`.
 
-```yaml
-# Security
-encrypt: # hexo-blog-encrypt
-  abstract: Here's something encrypted, password is required to continue reading.
-  message: Hey, password is required here.
-  tags:
-  - {name: encryptAsDiary, password: passwordA}
-  - {name: encryptAsTips, password: passwordB}
-  theme: xray
-  wrong_pass_message: Oh, this is an invalid password. Check and try again, please.
-  # Deprecated under v4 (alias of `wrong_pass_message`); see "Advanced settings".
-  wrong_hash_message: Oh, these decrypted content cannot be verified, but you can still have a look.
+| Browser | Minimum | Tested |
+| --- | --- | --- |
+| Chromium / Edge | 92+ | Automated: Playwright Chromium in CI, Hexo 7 and 8 |
+| Firefox | 90+ | Automated: Playwright Firefox in CI |
+| Safari (macOS) | 14+ | Automated: Playwright WebKit in CI (WebKit engine, not Safari itself) |
+| Safari (iOS) | 14+ | Manual only |
 
-```
+Minimum versions come from Web Crypto and language feature support; CI runs
+the current Playwright builds, not these minimums.
 
-Check them online, and PICK one:
+On plain HTTP from a non-localhost host, `crypto.subtle` is `undefined`, so
+decryption cannot run; the post shows an "open this page over HTTPS" message
+instead of the wrong-password error. Always serve production sites over HTTPS.
 
-+ [default](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/default/)
-+ [blink](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/blink/)
-+ [shrink](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/shrink/)
-+ [flip](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/flip/)
-+ [up](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/up/)
-+ [surge](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/surge/)
-+ [wave](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/wave/)
-+ [xray](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/xray/)
+## Contributing
 
+Issues and pull requests are welcome. Please read
+[CONTRIBUTING.md](./.github/CONTRIBUTING.md) and include reproduction steps,
+logs and your configuration when reporting a bug.
+
+- [Architecture](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Architecture)
+- [Development](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Development)
+- [Releasing](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Release-Process)
+- [Themes](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Theme-Authoring)
 
 ## License
 
-See [LICENSE](./LICENSE) file.
+[MIT](./LICENSE)
 
 ## Thanks
 
-Collaborator - [xiazeyu](https://github.com/xiazeyu)
+Collaborator: [xiazeyu](https://github.com/xiazeyu)

@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const path = require('node:path');
 
 const { resolve } = require('./config');
@@ -7,6 +8,7 @@ const { encrypt, encryptArgon2id } = require('./crypto');
 const { createRenderer } = require('./template');
 const { createGenerator } = require('./generator');
 const { createLogger } = require('./logger');
+const { registerTags, registerBlockFilter } = require('./tag');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const TEMPLATE_DIR = path.join(REPO_ROOT, 'lib');
@@ -15,6 +17,7 @@ const BUNDLE_PATH = path.join(REPO_ROOT, 'lib', 'hbe.bundle.js');
 const BUNDLE_SOURCEMAP_PATH = path.join(REPO_ROOT, 'lib', 'hbe.bundle.js.map');
 
 const FORMAT_VERSION = '4';
+const STABLE_SALT_NAMESPACE = 'hexo-blog-encrypt:v4:stableSalt:';
 
 // Per-instance Symbol so user front-matter keys can never collide with our
 // idempotence marker. We deliberately do NOT use Symbol.for(...) (a global
@@ -45,6 +48,14 @@ function normalizePostTags(postTags) {
     return out;
   }
   return [];
+}
+
+function stableSaltFromPermalink(permalink) {
+  return crypto.createHash('sha256')
+    .update(STABLE_SALT_NAMESPACE)
+    .update('\0')
+    .update(permalink)
+    .digest();
 }
 
 function resolveTagPassword(hexoEncrypt, postTags) {
@@ -81,6 +92,9 @@ function register(hexo) {
     sourcemapPath: BUNDLE_SOURCEMAP_PATH,
   });
 
+  registerTags(hexo);
+  registerBlockFilter(hexo, { renderer, assetGenerator, logger });
+
   hexo.extend.filter.register('after_post_render', async function v4Filter(data) {
     // Idempotence: stamp a per-instance Symbol on `data` after a successful
     // pass so re-entry on the same object is a no-op. We deliberately do NOT
@@ -99,11 +113,19 @@ function register(hexo) {
       return data;
     }
 
+    const titleText = (typeof data.title === 'string') ? data.title.trim() : '(untitled)';
     let effectivePostData = data;
     if (fmPassword === undefined || fmPassword === null) {
       const tagMatch = resolveTagPassword(hexo.config && hexo.config.encrypt, data.tags);
-      if (!tagMatch || tagMatch.password === undefined || tagMatch.password === null) {
-        return data;
+      if (!tagMatch) return data;
+      if (tagMatch.password === undefined || tagMatch.password === null) {
+        // Fail closed (#244): a matching tag entry without a password is a
+        // config mistake; publishing the post in plaintext would be silent.
+        throw new Error(
+          `hexo-blog-encrypt: post "${titleText}" matches encrypt.tags entry "${tagMatch.name}", ` +
+          'but that entry has no password. Set a password on the tag entry in _config.yml, ' +
+          'or add `password: ""` to the post front matter to publish it unencrypted.'
+        );
       }
       effectivePostData = Object.assign({}, data, { password: tagMatch.password });
       effectivePostData.__tagName = tagMatch.name;
@@ -122,7 +144,6 @@ function register(hexo) {
     logger.updateSilent(!!cfg.silent);
 
     const tagName = effectivePostData.__tagName;
-    const titleText = (typeof data.title === 'string') ? data.title.trim() : '(untitled)';
     if (tagName) {
       logger.info(`hexo-blog-encrypt: encrypting "${titleText}" via tag "${tagName}" with theme ${cfg.theme}.`);
     } else {
@@ -134,20 +155,27 @@ function register(hexo) {
 
     const plaintext = String(data.content == null ? '' : data.content);
 
+    const stableSaltEnabled = cfg.stableSalt === true
+      && typeof data.permalink === 'string'
+      && data.permalink.length > 0;
+    const stableSalt = stableSaltEnabled ? stableSaltFromPermalink(data.permalink) : undefined;
+
     let salt, nonce, ciphertext, kdf;
     if (cfg.kdf.algorithm === 'argon2id') {
       const result = await encryptArgon2id(plaintext, cfg.password, {
         timeCost: cfg.kdf.timeCost,
         memoryCost: cfg.kdf.memoryCost,
         parallelism: cfg.kdf.parallelism,
+        salt: stableSalt,
       });
       salt = result.salt;
       nonce = result.nonce;
       ciphertext = result.ciphertext;
       kdf = result.kdf;
     } else {
-      const result = encrypt(plaintext, cfg.password, {
+      const result = await encrypt(plaintext, cfg.password, {
         iterations: cfg.kdf.iterations,
+        salt: stableSalt,
       });
       salt = result.salt;
       nonce = result.nonce;

@@ -59,7 +59,7 @@ async function deriveKeyPbkdf2(password, salt, iterations) {
 // ---------- Argon2id (hash-wasm) ----------
 
 async function deriveKeyArgon2id(password, salt, opts) {
-  const timeCost = (opts && Number.isInteger(opts.timeCost) && opts.timeCost >= 1)
+  const timeCost = (opts && Number.isInteger(opts.timeCost) && opts.timeCost >= 2)
     ? opts.timeCost : 3;
   const memoryCost = (opts && Number.isInteger(opts.memoryCost) && opts.memoryCost >= 8192)
     ? opts.memoryCost : 65536;

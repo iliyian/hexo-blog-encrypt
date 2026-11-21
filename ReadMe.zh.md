@@ -1,143 +1,100 @@
 # hexo-blog-encrypt
 
+> 为单篇 Hexo 文章设置密码. 构建时使用 AES-256-GCM 加密, 读者在浏览器中通过
+> Web Crypto API 解密. 无需服务端, 生成的 HTML 中不含明文.
+
+**[▶ 在线演示](https://d0n9x1n.github.io/hexo-blog-encrypt/)**: 所有演示密码都是 `hello`.
+
 [![GitHub release](https://img.shields.io/github/v/release/D0n9X1n/hexo-blog-encrypt?include_prereleases&logo=github&label=release&color=brightgreen)](https://github.com/D0n9X1n/hexo-blog-encrypt/releases)
 [![npm](https://img.shields.io/npm/v/hexo-blog-encrypt?logo=npm&color=brightgreen)](https://www.npmjs.com/package/hexo-blog-encrypt)
 [![npm downloads](https://img.shields.io/npm/dm/hexo-blog-encrypt?logo=npm&label=downloads)](https://www.npmjs.com/package/hexo-blog-encrypt)
 [![License](https://img.shields.io/npm/l/hexo-blog-encrypt?color=brightgreen)](./LICENSE)
 [![Tests](https://github.com/D0n9X1n/hexo-blog-encrypt/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/D0n9X1n/hexo-blog-encrypt/actions/workflows/test.yml)
+[![Coverage](https://img.shields.io/badge/server%20coverage-100%25-brightgreen)](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Development-zh-CN)
 [![Live Demo](https://img.shields.io/badge/demo-online-brightgreen?logo=github)](https://d0n9x1n.github.io/hexo-blog-encrypt/)
+[![Node](https://img.shields.io/node/v/hexo-blog-encrypt?logo=node.js&color=brightgreen)](./package.json)
+[![Hexo](https://img.shields.io/npm/dependency-version/hexo-blog-encrypt/peer/hexo?logo=hexo&label=hexo)](https://hexo.io/)
+[![Dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](./package.json)
+[![npm provenance](https://img.shields.io/badge/npm-provenance-blue?logo=npm)](https://www.npmjs.com/package/hexo-blog-encrypt#provenance)
+[![GitHub stars](https://img.shields.io/github/stars/D0n9X1n/hexo-blog-encrypt?style=flat&logo=github)](https://github.com/D0n9X1n/hexo-blog-encrypt/stargazers)
 
-#### 提 issue 之前，请务必提供复现方式，log，配置信息等必要信息。良好的 issue 可以节省双方的时间。
-*请严格按照模版要求，不明确的 issue 将直接关闭。*
+[English](./ReadMe.md) · 中文说明 · [Wiki](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki) · [Releases](https://github.com/D0n9X1n/hexo-blog-encrypt/releases)
 
-**参考 issue:**
+## 目录
 
-> + [Issue 83](https://github.com/MikeCoder/hexo-blog-encrypt/issues/83)
-> + [Issue 68](https://github.com/MikeCoder/hexo-blog-encrypt/issues/68)
+- [主要特性](#主要特性)
+- [在线演示](#在线演示)
+- [安装](#安装)
+- [快速开始](#快速开始)
+- [配置](#配置)
+- [主题集成](#主题集成)
+- [浏览器支持](#浏览器支持)
+- [参与贡献](#参与贡献)
+- [许可](#许可)
 
-## 这是个啥
+## 主要特性
 
-- ~~首先, 这是 Hexo 生态圈中 **最好的** 博客加密插件~~
-
-- 你可能需要写一些私密的博客, 通过密码验证的方式让人不能随意浏览.
-
-- 这在 wordpress, emlog 或是其他博客系统中都很容易实现, 然而 hexo 除外. :(
-
-- 为了解决这个问题, 让我们有请 "hexo-blog-encrypt".
-
-## 特性
-
-- 一旦你输入了正确的密码, 加密的文章会在浏览器端解密. 默认情况下密码 **不会** 被持久化; 在文章信息头或 `_config.yml` 中设置 `autoSave: true` 之后, 派生出的密钥才会被缓存到 `localStorage`, 这样下次刷新同一页面时就能自动解密. 若文章中含有脚本, 它将会在解密后被正确执行.
-
-- 支持按标签加密.
-
-- 所有的核心功能都是由原生的 API 所提供的. 在 Node.js中, 我们使用 [Crypto](https://nodejs.org/dist/latest-v12.x/docs/api/crypto.html). 在浏览器中, 我们使用 [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API).
-
-- [PBKDF2](https://tools.ietf.org/html/rfc2898) 与 [SHA-256](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf) 被用于派生密钥, 我们使用 [AES-256-GCM](https://csrc.nist.gov/publications/detail/sp/800-38d/final) 进行带认证的加解密 — GCM 自带的 auth tag 即可检测密文被篡改 (取代了 v3 中独立的 HMAC 步骤).
-
-- 我们广泛地使用 Promise 来进行异步操作, 以此确保线程不被阻塞.
-
-- 加密页面多主题支持, 现在已经支持的主题有 [`default`, `xray`], 更多的主题正在开发中.
-
-- 过时的浏览器将不能正常显示, 因此, 请升级您的浏览器.
+| | |
+| --- | --- |
+| **认证加密** | [PBKDF2](https://www.rfc-editor.org/rfc/rfc8018)-SHA256 派生密钥, [AES-256-GCM](https://csrc.nist.gov/pubs/sp/800/38/d/final) 加密. GCM 认证标签会拒绝错误密码和被篡改的密文. |
+| **只用原生密码学 API** | 构建时使用 Node.js [`crypto`](https://nodejs.org/api/crypto.html), 阅读时使用浏览器 [Web Crypto API](https://developer.mozilla.org/zh-CN/docs/Web/API/Web_Crypto_API). 没有运行时依赖. |
+| **每篇文章独立密钥** | 每篇文章都有独立的 32 字节 salt 和 12 字节 nonce, 破解一篇不会加速对其它文章的攻击. |
+| **文章密码或标签密码** | 在文章信息头写 `password:`, 或在 `_config.yml` 中为标签配置密码. |
+| **8 个主题** | `default`, `blink`, `flip`, `shrink`, `surge`, `up`, `wave`, `xray`. 放入一个 HTML 文件即可新增主题. |
+| **脚本照常运行** | 解密后文章中的脚本按文档顺序执行. 文章显示后触发 `hexo-blog-decrypt` 事件. |
+| **默认保护隐私** | 除非用 `autoSave` 开启, 否则不保存密码或密钥. |
+| **Claude Code skill** | [`hexo-encrypt-toc`](https://github.com/D0n9X1n/hexo-blog-encrypt/blob/master/skills/hexo-encrypt-toc/SKILL.md) 为任意主题修复加密文章的目录, 且不泄露标题. |
+| **完整测试** | 服务端 100% 行 / 分支 / 函数覆盖, 并用 Playwright 对每个主题做端到端测试. |
 
 ## 在线演示
 
-- 点击 [Demo Page](https://d0n9x1n.github.io/hexo-blog-encrypt/), **所有的密码都是 `hello`**.
+打开 **[演示站点](https://d0n9x1n.github.io/hexo-blog-encrypt/)**, 所有密码都是 `hello`.
 
-## 浏览器支持
-
-运行时使用 Web Crypto (`crypto.subtle`), 因此需要 **安全上下文**
-(HTTPS 或 `http://localhost`). 已验证:
-
-| 浏览器 | 最低版本 | 备注 |
-| --- | --- | --- |
-| Chromium / Edge | 92+ | CI 中通过 Playwright 自动测试 |
-| Firefox | 90+ | |
-| Safari (macOS / iOS) | 14+ | 发版前手动冒烟 |
-
-如果站点是通过非 localhost 的纯 HTTP 提供, 解密会静默失败
-(`crypto.subtle` 为 `undefined`). 生产环境请始终使用 HTTPS.
-
-## 为什么要从 v3 升级
-
-v4 不是表面的刷新, 而是真正修复了 v3 的安全短板与 UX 痛点. 主要原因:
-
-- **更强的密码学.** **AES-256-GCM** 自带的 auth tag 取代了 v3 的
-  AES-CBC + 独立 HMAC. 单一原语、单一鉴权路径、硬件加速, 并且免疫一类
-  CBC padding-oracle 与 HMAC 比较 bug.
-- **每篇独立 salt + nonce.** v3 所有文章共用同一个 salt — 同样的密码
-  到处派生出同样的密钥. v4 每篇独立派生密钥 — 攻击者无法把对一个密码
-  的 PBKDF2 计算结果, 复用到其它使用相同密码的文章上.
-- **更强的 KDF 默认值.** v3 默认仅 **1,024** 轮 PBKDF2-SHA256 — 远低于
-  现代推荐值, 在现代硬件上很容易被批量爆破均摊. v4 默认 **250,000**
-  轮 (≈ 240× 单次工作量), 推荐 ≥ 600,000 (OWASP 2023). 可通过
-  `kdf.iterations` 按文章覆盖.
-- **隐私默认关闭.** v3 总是把解密后的密钥缓存到 `localStorage`, 共享
-  设备的下一个用户可以直接重看. v4 默认 `autoSave: false`, 你按需开启
-  (按文章或全局).
-- **行内错误提示.** v3 用 `window.alert()` 弹窗提示密码错 — 移动端
-  尤其打断流程. v4 直接把错误显示在密码框旁边 (`role="alert"`).
-- **可选的"解密"按钮.** 让不知道按 Enter 的访客也能用. 文案可配置.
-- **更小.** 抛弃了打包的 CryptoJS 依赖, 改用浏览器原生 Web Crypto
-  API. 浏览器端 bundle ≈ 6 KB (minified).
-- **有测试.** 服务端套件 100% 行 / 分支 / 函数覆盖 + Playwright e2e
-  覆盖全部 8 个主题. v3 几乎没有自动化测试; v4 每次推送都跑回归.
-
-如果你在意有人能拉到你生成的 HTML 后做离线密码爆破, 或者在意共用
-设备上缓存密钥被偷看 — 请升级.
-
-每条变化更深入的"为什么", 见 wiki:
-[Migration v3 → v4](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Migration-v3-to-v4).
-
-## 从 v3 升级
-
-v4 修改了密文格式 (AES-GCM, 每篇文章独立 salt + 每次加密独立 nonce).
-v3 加密的产物在 v4 下无法解密, 反之亦然. 升级步骤:
-
-1. 升级插件: `npm install --save hexo-blog-encrypt@^4`.
-2. 重新生成: `hexo clean && hexo generate`.
-3. 如果使用 CDN, 请清空缓存 (按设计, 每次构建文章 HTML 都会变化 —
-   每次加密都使用新的 nonce — 但运行时资源 `lib/hbe.<hash>.js`
-   是按内容 hash 命名的, 只有 bundle 改变时 URL 才会变).
-4. 可选: 从 `_config.yml` 与 front-matter 中删除 `wrong_hash_message`
-   (v4 起废弃, v5 中删除).
-
-不会触碰任何源 `.md` 文件. 完整的 break 列表与新增的 `decryptButton` /
-`autoSave` / `kdf.iterations` 等配置请见 [CHANGELOG.md](./CHANGELOG.md).
+- [主题展示](https://d0n9x1n.github.io/hexo-blog-encrypt/tags/theme-demo/)
+- [解密回调](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/callback/)
+- [脚本加载顺序与缓存密钥](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/script-order/)
 
 ## 安装
 
-- `npm install --save hexo-blog-encrypt`
+```bash
+npm install --save hexo-blog-encrypt
+```
 
-- 或 `yarn add hexo-blog-encrypt` (需要) [Yarn](https://yarnpkg.com/en/))
+需要 Node.js 18 及以上, Hexo 5 及以上. npm 包带有
+[provenance](https://docs.npmjs.com/generating-provenance-statements) 证明,
+并镜像发布到 GitHub Packages (`@d0n9x1n/hexo-blog-encrypt`).
 
-## 快速使用
+## 快速开始
 
-- 将 "password" 字段添加到您文章信息头就像这样.
+在文章信息头中加入 `password`:
 
 ```markdown
-
 ---
 title: Hello World
 date: 2016-03-30 21:18:02
 password: hello
 ---
-
 ```
 
-- 再使用 `hexo clean && hexo g && hexo s` 在本地预览加密的文章.
+然后重新生成并预览:
 
-## 设置优先级
+```bash
+hexo clean && hexo generate && hexo server
+```
 
-文章信息头 > 按标签加密
+文章正文会被替换为密码输入框. 首页等列表页显示 `abstract` 文本, 而不是正文.
 
-## 高级设置
+## 配置
+
+配置按以下顺序生效:
+
+**文章信息头 > `_config.yml` 中的 `encrypt:` > 内置默认值**
+
+文章信息头中的 `password` 优先于标签密码.
 
 ### 文章信息头
 
 ```markdown
-
 ---
 title: Hello World
 tags:
@@ -147,201 +104,246 @@ password: mikemessi
 abstract: 有东西被加密了, 请输入密码查看.
 message: 您好, 这里需要密码.
 wrong_pass_message: 抱歉, 这个密码看着不太对, 请再试试.
-# v4 起已废弃 — AES-GCM 已经将 “密码错误” 与 “密文被篡改” 这两类失败统一处理,
-# 该字段现在等同于 `wrong_pass_message`. 请改设 `wrong_pass_message`.
-wrong_hash_message: 抱歉, 这个文章不能被校验, 不过您还是能看看解密后的内容.
+theme: xray
 ---
-
 ```
 
-### `_config.yml`
-
-#### 示例
+### 全站 `_config.yml`
 
 ```yaml
-
-# Security
 encrypt: # hexo-blog-encrypt
   abstract: 有东西被加密了, 请输入密码查看.
   message: 您好, 这里需要密码.
-  tags:
-  - {name: tagName, password: 密码A}
-  - {name: tagName, password: 密码B}
   wrong_pass_message: 抱歉, 这个密码看着不太对, 请再试试.
-  # v4 起已废弃 (等同于 `wrong_pass_message`), 详见上方说明.
-  wrong_hash_message: 抱歉, 这个文章不能被校验, 不过您还是能看看解密后的内容.
+  theme: default
+  silent: false
 
-  # ── v4 新配置 (全部可选, 均有安全的默认值) ────────────────────────────
-  # 在密码框旁渲染一个可见的 “解密” 按钮.
-  # 主题模板若已经通过 `<%- decrypt_button %>` 自带按钮则会忽略本配置.
-  # 默认: true.
+  # 加密所有带有以下标签的文章.
+  tags:
+  - {name: 作为日记加密, password: 密码A}
+  - {name: 作为提示加密, password: 密码B}
+
+  # 在密码框旁显示 "解密" 按钮. 默认: true.
   decryptButton:
     show: true
     text: 解密
 
-  # 解密后是否将明文缓存到 localStorage, 让刷新页面跳过密码输入.
-  # 默认 OFF — 可在文章 front-matter 中通过 `autoSave: true` 单独开启,
-  # 也可以在这里全局开启. 缓存键命名空间为 `hbe.v4.<post-permalink-hash>`.
+  # 将派生出的 AES 密钥缓存到 localStorage, 刷新页面时跳过密码输入.
+  # 默认: false. 可在这里全局开启, 也可在文章信息头中单独开启.
+  # 缓存键为 `hbe.v4.<页面路径>`.
   autoSave: false
+
+  # 让同一篇文章的 PBKDF2 salt 在 clean build 之间保持稳定, 文章身份来自
+  # post permalink. 默认: false. 配合 autoSave 时, 适用于
+  # Cloudflare Pages、Vercel、Netlify、GitHub Actions 等每次部署都会从
+  # 干净环境重新生成 HTML 的平台.
+  #
+  # 只稳定 salt; AES-GCM nonce 每次加密仍然随机, 避免 nonce reuse.
+  # 如果文章 permalink 改变, stable salt 也会改变, 该页面已有的
+  # localStorage 缓存会失效.
+  stableSalt: false
 
   # PBKDF2 迭代次数. 下限: 100_000. 推荐 ≥ 600_000
   # (OWASP 2023 关于 PBKDF2-SHA256 的推荐). 低于推荐值时构建会打印 warning.
   # 默认: 250_000.
   kdf:
     iterations: 250000
-
 ```
 
-#### 对博文禁用 Tag 加密
+`autoSave` 读取缓存密钥时会比较缓存中的 salt 与当前页面 salt. 仅 nonce
+变化不会提前删除缓存; 浏览器会使用缓存密钥配合当前页面的 nonce 与密文尝试
+解密. 如果 AES-GCM 认证失败, 该缓存条目会被清除, 访客需要重新输入密码.
 
-只需要将博文头部的 `password` 设置为 `""` 即可取消 Tag 加密.
+**已保存的密钥及其暴露面.** 保存的密钥位于 `localStorage` 的
+`hbe.v4.<页面路径>`, 在被删除前可在本设备上解锁该文章. 同源运行的任何脚本
+(主题、统计、评论组件或被注入的脚本) 都能读取它, 因此只有在信任站点上所有脚本时
+才开启 `autoSave`. 文章通过已保存的密钥显示后, 上方的 **忘记已保存的密钥**
+按钮可删除该条目. 对某篇文章关闭 `autoSave` 后, 下次访问时会删除该文章已保存的
+密钥; v3 遗留的 `hexo-blog-encrypt:#…` 条目会被自动清除.
 
-Example:
+### 配置项一览
 
-```
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `password` | 无 | 加密该文章. `""` 表示不加密, 包括不使用标签加密. 匹配到的标签条目若没有密码, 构建会失败. |
+| `password: { env: NAME }` | 无 | 构建时从环境变量 `NAME` 读取密码 (可用于文章信息头、`encrypt.password` 或 `encrypt.tags[].password`). 变量缺失或为空时构建失败; 密码值不会被打印或渲染. 这只能让密码不出现在配置文件中, 不能保护公开提交的明文 Markdown. |
+| `abstract` | `Here's something encrypted…` | 首页和归档页显示的摘要. |
+| `message` | `Hey, password is required here.` | 密码输入框的提示文字. |
+| `wrong_pass_message` | `Oh, this is an invalid password…` | 密码错误时的行内提示. |
+| `theme` | `default` | 8 个内置主题之一. 未知名称会回退到 `default` 并打印 warning. |
+| `tags` | `[]` | 仅限 `_config.yml`. 标签加密使用的 `{name, password}` 列表. |
+| `decryptButton.show` / `.text` | `true` / `Decrypt` | 是否显示解密按钮及其文字. |
+| `autoSave` | `false` | 将派生密钥缓存到 `localStorage`. |
+| `stableSalt` | `false` | 由 permalink 派生 salt, 让缓存密钥在 clean build 后仍然有效. |
+| `kdf.iterations` | `250000` | PBKDF2 迭代次数, 必须是不小于 100,000 的整数. |
+| `silent` | `false` | 隐藏构建时的 info 日志. warning 和 error 仍会输出. |
+| `wrong_hash_message` | `wrong_pass_message` | 已废弃的别名. AES-GCM 对错误密码和篡改给出同样的结果. |
+| `template` | 无 | `theme` 的已废弃别名. |
+
+布尔配置项 (`autoSave`、`stableSalt`、`silent`、`decryptButton.show`) 必须是 `true` 或 `false`. 带引号的 `"true"`/`"false"` 会被接受并打印 warning; 其他值会使构建失败.
+
+`abstract`、`message`、`wrong_pass_message` 和 `decryptButton.text` 的默认值跟随文章的 `lang`/`language`, 否则跟随站点 `language`. `zh`、`zh-CN` 和 `zh-Hans` 使用简体中文, 其他语言使用英文. 显式配置始终优先.
+
+### 对单篇文章禁用标签加密
+
+在该文章的信息头中设置空密码:
+
+```markdown
 ---
-title: Callback Test
-date: 2019-12-21 11:54:07
+title: 带有加密标签的公开文章
 tags:
     - A Tag should be encrypted
 password: ""
 ---
-
-Use a "" to diable tag encryption.
 ```
 
-### 配置优先级
+### 部分加密与嵌套加密 (本 fork)
 
-文章信息头 > `_config.yml` (站点根目录下的) > 默认配置
+本 fork 在上游 v4.1.0 的基础上增加了两个块级标签:
 
-### 关于 Callback 函数
-在部分博客中, 解密后部分元素可能无法正常显示或者表现, 这属于已知问题. 目前的解决办法是通过自行查阅自己的博客中的代码, 了解到在 onload 事件发生时调用了哪些函数, 并将这些函数挑选后写入到博客内容中. 如:
+- `{% encrypt "密码" %}` 只加密这个块, 文章其余部分保持公开.
+- `{% encrypt_nested "外层" "内层" ... %}` 按密码数量逐层加密, 第一个参数是最外层.
 
+```markdown
+公开的开头.
+
+{% encrypt "block-secret" %}
+**只有这个块会被加密.**
+{% endencrypt %}
+
+{% encrypt_nested "outer" "inner" %}
+**需要两层密码.**
+{% endencrypt_nested %}
 ```
----
-title: Callback Test
-date: 2019-12-21 11:54:07
-tags:
-    - Encrypted
----
 
-This is a blog to test Callback functions. You just need to add code at the last of your post like following:
+块内容会先用文章对应的 Markdown 引擎渲染再加密; 一个页面可以有多个独立块; 还可以用文章级 `password:` 包住内层 `{% encrypt %}` 得到两层嵌套. 每个块使用独立随机 salt; 上游 npm 版本不支持这些标签. 详见 [部分加密与嵌套加密](https://github.com/iliyian/hexo-blog-encrypt/blob/master/wiki/Partial-and-Nested-Encryption-zh-CN.md).
 
-It will be called after the blog decrypted.
+## 主题集成
 
+### 解密后事件
+
+每篇文章显示后, 插件会在 `window` 上触发一次 `hexo-blog-decrypt`.
+`event.detail.mode` 为 `manual` (输入密码) 或 `cached` (已缓存的密钥),
+`event.detail.element` 是显示出的容器 (首页同时展示多篇加密文章时可用来区分).
+监听它来重新执行需要扫描正文的代码:
+
+```js
+window.addEventListener('hexo-blog-decrypt', function (event) {
+  // 重新初始化主题的目录、代码高亮等.
+  console.log('Decrypted:', event.detail.mode, event.detail.element);
+});
+```
+
+### PJAX 与单页应用主题
+
+脚本会初始化页面上的每一篇加密文章, 且每篇只初始化一次. 在 `document` 上触发
+`pjax:complete`, `pjax:success`, `swup:contentReplaced` 或 `turbo:load` 时会自动
+重新扫描. 其他路由方案可在替换内容后调用幂等的初始化函数:
+
+```js
+window.hexoBlogEncrypt.init();          // 整个文档
+window.hexoBlogEncrypt.init(container); // 仅某个子树
+```
+
+### 加密文章中的脚本
+
+文章中的脚本会在解密后执行. 自 **4.0.3** 起, 普通外部脚本会按文档顺序加载,
+再执行其后的内联脚本, 因此 DPlayer 等依赖库的代码可以正确初始化. 解密事件会等待
+恢复的外部脚本加载完成、加载失败或达到 **每个脚本 15 秒** 的期限. 超时不会取消
+脚本, 它之后仍可能执行. 原有的 `onload` / `onerror` 处理函数会被保留. 显式
+`async` 的脚本仍独立加载, 恢复的 `defer` 脚本不会重建文档解析阶段. 内联
+`type="module"` 脚本及脚本中的异步任务保留原生调度, 可能在解密事件之后才完成.
+
+```markdown
 <script>
-    // 添加一个 script tag 与代码在文章末尾.
-    alert("Hello World");
+  // 文章解密后执行.
+  console.log('Hello from an encrypted post');
 </script>
 ```
 
-例子在: [Callback 例子](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/callback/).
+### 目录 (TOC)
 
-### 解密后的触发事件
-感谢 @[f-dong](https://github.com/f-dong), 我们现在会在解密完成后触发一个 `hexo-blog-decrypt` 事件, 你们可以编写 callback 来监听该事件.
+**不要把加密文章的 `post.origin` 渲染到生成的 HTML 中.** 它保存的是为旧版 Hexo
+集成保留的明文. 用 `display:none` 隐藏的 TOC 仍然会公开标题. 搜索、订阅和站点地图
+插件也必须排除加密文章的明文字段.
 
-```
-// trigger event
-var event = new Event('hexo-blog-decrypt');
-window.dispatchEvent(event);
-```
+只为未加密文章生成服务端 TOC:
 
-### 对 TOC 进行加密
-
-如果你有一篇文章使用了 TOC，你需要修改模板的部分代码。这里用 landscape 作为例子：
-
-+ 你可以在 hexo/themes/landscape/layout/_partial/article.ejs 找到 article.ejs。
-+ 然后找到 <% post.content %> 这段代码，通常在30行左右。
-+ 使用如下的代码来替代它:
-
-```
-<% if(post.toc == true){ %>
-  <div id="toc-div" class="toc-article" <% if (post.encrypt == true) { %>style="display:none" <% } %>>
-    <strong class="toc-title">Index</strong>
-      <% if (post.encrypt == true) { %>
-        <%- toc(post.origin, {list_number: true}) %>
-      <% } else { %>
-        <%- toc(post.content, {list_number: true}) %>
-      <% } %>
-  </div>
+```ejs
+<% if (post.toc === true && !post.encrypt) { %>
+  <div class="toc-article"><%- toc(post.content, {list_number: true}) %></div>
 <% } %>
 <%- post.content %>
 ```
 
-### 禁用 Log
-If you want to disable the logging, you can add a silent property in `_config.yml` and set it to true.
-如果你想要禁止使用 Log, 你可以在 `_config.yml` 中增加一个 silent 属性, 并将其设置为 true.
+对加密文章, 在 `hexo-blog-decrypt` 回调中根据解密后的 `#hexo-blog-encrypt`
+内容在浏览器端生成目录.
 
-```yaml
-# Security
-encrypt: # hexo-blog-encrypt
-  silent: true
+#### 让 Claude Code 修复你的主题
+
+[`hexo-encrypt-toc`](https://github.com/D0n9X1n/hexo-blog-encrypt/blob/master/skills/hexo-encrypt-toc/SKILL.md) skill 适用于任意 Hexo 主题: 找到主题的目录实现,
+移除明文来源, 在解密后重建目录, 并对生成的站点做泄露检查. 它只是一个文件,
+保存为 [Claude Code](https://claude.com/claude-code) skill 即可:
+
+```bash
+mkdir -p ~/.claude/skills/hexo-encrypt-toc
+curl -fsSL https://raw.githubusercontent.com/D0n9X1n/hexo-blog-encrypt/master/skills/hexo-encrypt-toc/SKILL.md \
+  -o ~/.claude/skills/hexo-encrypt-toc/SKILL.md
 ```
 
-这样就会禁止如 `INFO  hexo-blog-encrypt: encrypting "{Blog Name}" based on Tag: "EncryptedTag".` 的日志.
+然后在博客目录中让 Claude Code *"修复我主题中加密文章的目录"*, 或运行
+`/hexo-encrypt-toc`. 详见 [wiki: Encrypted TOC](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Encrypted-TOC).
 
 ### 加密主题
 
-之前, 我们尝试使用 `template` 关键字来让用户能修改自己的主题. 后来发现真不是一个好主意. 所以我们现在引入了主题: `theme` 关键字.
+通过文章信息头的 `theme:` 为单篇文章选择主题, 或在 `_config.yml` 中为全站设置.
+在线预览:
 
-你可以简单的使用 `theme` 在 `_config.yml` 里或者文章头, 如下:
+[default](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/default/) ·
+[blink](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/blink/) ·
+[flip](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/flip/) ·
+[shrink](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/shrink/) ·
+[surge](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/surge/) ·
+[up](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/up/) ·
+[wave](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/wave/) ·
+[xray](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/xray/)
 
-### 文章信息头
+新增主题请参阅 [主题开发](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Theme-Authoring-zh-CN).
 
-```markdown
+## 浏览器支持
 
----
-title: Hello World
-tags:
-- 作为日记加密
-date: 2016-03-30 21:12:21
-password: mikemessi
-abstract: 有东西被加密了, 请输入密码查看.
-message: 您好, 这里需要密码.
-theme: xray
-wrong_pass_message: 抱歉, 这个密码看着不太对, 请再试试.
-# v4 起已废弃 (等同于 `wrong_pass_message`), 详见 “高级设置”.
-wrong_hash_message: 抱歉, 这个文章不能被校验, 不过您还是能看看解密后的内容.
----
+解密使用 Web Crypto (`crypto.subtle`), 需要 **安全上下文**: HTTPS 或
+`http://localhost`.
 
-```
+| 浏览器 | 最低版本 | 测试方式 |
+| --- | --- | --- |
+| Chromium / Edge | 92+ | 自动: CI 中 Playwright Chromium, Hexo 7 与 8 |
+| Firefox | 90+ | 自动: CI 中 Playwright Firefox |
+| Safari (macOS) | 14+ | 自动: CI 中 Playwright WebKit (WebKit 引擎, 非 Safari 本身) |
+| Safari (iOS) | 14+ | 仅手动测试 |
 
-### 在 `_config.yml`
+最低版本依据 Web Crypto 与语言特性支持; CI 运行的是当前的 Playwright
+浏览器版本, 而非这些最低版本.
 
-#### 示例
+在非 localhost 的纯 HTTP 站点上, `crypto.subtle` 为 `undefined`, 无法解密;
+文章会提示 "请通过 HTTPS 打开此页面", 而不是显示密码错误.
+生产环境请始终使用 HTTPS.
 
-```yaml
+## 参与贡献
 
-# Security
-encrypt: # hexo-blog-encrypt
-  abstract: 有东西被加密了, 请输入密码查看.
-  message: 您好, 这里需要密码.
-  tags:
-  - {name: tagName, password: 密码A}
-  - {name: tagName, password: 密码B}
-  theme: xray
-  wrong_pass_message: 抱歉, 这个密码看着不太对, 请再试试.
-  # v4 起已废弃 (等同于 `wrong_pass_message`), 详见 “高级设置”.
-  wrong_hash_message: 抱歉, 这个文章不能被校验, 不过您还是能看看解密后的内容.
+欢迎提交 issue 和 pull request. 请先阅读
+[CONTRIBUTING.md](./.github/CONTRIBUTING.md). 报告 bug 时请附上复现步骤、日志和
+配置, 信息不完整的 issue 可能会被关闭.
 
-```
-
-你可以在线挑选你喜欢的主题,并应用到你的博客中:
-
-+ [default](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/default/)
-+ [blink](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/blink/)
-+ [shrink](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/shrink/)
-+ [flip](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/flip/)
-+ [up](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/up/)
-+ [surge](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/surge/)
-+ [wave](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/wave/)
-+ [xray](https://d0n9x1n.github.io/hexo-blog-encrypt/demo/theme/xray/)
-
+- [架构](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Architecture-zh-CN)
+- [开发](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Development-zh-CN)
+- [发布](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Release-Process-zh-CN)
+- [主题](https://github.com/D0n9X1n/hexo-blog-encrypt/wiki/Theme-Authoring-zh-CN)
 
 ## 许可
 
-看看 [LICENSE](./LICENSE).
+[MIT](./LICENSE)
 
 ## 感谢
 
-Collaborator - [xiazeyu](https://github.com/xiazeyu)
+协作者: [xiazeyu](https://github.com/xiazeyu)

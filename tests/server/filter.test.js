@@ -379,6 +379,93 @@ test('per-post salt: two posts with the same password produce different salts AN
   assert.notEqual(pa.ciphertextHex, pb.ciphertextHex, 'ciphertext must differ');
 });
 
+test('stableSalt defaults off: same permalink built twice still produces different salts', async () => {
+  hexo.config.encrypt = {};
+  const opts = {
+    title: 'stable-default-off',
+    password: 'shared',
+    content: '<p>same</p>',
+    permalink: 'https://example.test/stable-default-off/',
+  };
+  const a = makeSyntheticData(opts);
+  const b = makeSyntheticData(opts);
+
+  await hexo.execFilter('after_post_render', a, { context: hexo });
+  await hexo.execFilter('after_post_render', b, { context: hexo });
+
+  const pa = extractPayload(a.content);
+  const pb = extractPayload(b.content);
+  assert.notEqual(pa.saltHex, pb.saltHex, 'stableSalt defaults off, so salt must remain random');
+});
+
+test('stableSalt opt-in: same permalink built twice reuses salt but not nonce', async () => {
+  hexo.config.encrypt = { stableSalt: true };
+  const opts = {
+    title: 'stable-on',
+    password: 'shared',
+    content: '<p>same</p>',
+    permalink: 'https://example.test/stable-on/',
+  };
+  const a = makeSyntheticData(opts);
+  const b = makeSyntheticData(opts);
+
+  await hexo.execFilter('after_post_render', a, { context: hexo });
+  await hexo.execFilter('after_post_render', b, { context: hexo });
+
+  const pa = extractPayload(a.content);
+  const pb = extractPayload(b.content);
+  assert.equal(pa.saltHex, pb.saltHex, 'same permalink must derive the same stable salt');
+  assert.notEqual(pa.nonceHex, pb.nonceHex, 'nonce must remain random');
+  assert.notEqual(pa.ciphertextHex, pb.ciphertextHex, 'fresh nonce keeps ciphertext different');
+  assert.ok(decryptHbeV4({ password: 'shared', ...pa }).includes('<p>same</p>'));
+  assert.ok(decryptHbeV4({ password: 'shared', ...pb }).includes('<p>same</p>'));
+});
+
+test('stableSalt opt-in: different permalinks produce different salts', async () => {
+  hexo.config.encrypt = { stableSalt: true };
+  const a = makeSyntheticData({
+    title: 'stable-a',
+    password: 'shared',
+    content: '<p>same</p>',
+    permalink: 'https://example.test/stable-a/',
+  });
+  const b = makeSyntheticData({
+    title: 'stable-b',
+    password: 'shared',
+    content: '<p>same</p>',
+    permalink: 'https://example.test/stable-b/',
+  });
+
+  await hexo.execFilter('after_post_render', a, { context: hexo });
+  await hexo.execFilter('after_post_render', b, { context: hexo });
+
+  const pa = extractPayload(a.content);
+  const pb = extractPayload(b.content);
+  assert.notEqual(pa.saltHex, pb.saltHex, 'permalink is the stable salt identity');
+});
+
+test('stableSalt opt-in without a non-empty permalink falls back to random salt', async () => {
+  hexo.config.encrypt = { stableSalt: true };
+  const a = makeSyntheticData({ title: 'stable-no-permalink-a', password: 'shared', content: '<p>same</p>' });
+  const b = makeSyntheticData({ title: 'stable-no-permalink-b', password: 'shared', content: '<p>same</p>' });
+  const c = makeSyntheticData({
+    title: 'stable-empty-permalink',
+    password: 'shared',
+    content: '<p>same</p>',
+    permalink: '',
+  });
+
+  await hexo.execFilter('after_post_render', a, { context: hexo });
+  await hexo.execFilter('after_post_render', b, { context: hexo });
+  await hexo.execFilter('after_post_render', c, { context: hexo });
+
+  const pa = extractPayload(a.content);
+  const pb = extractPayload(b.content);
+  const pc = extractPayload(c.content);
+  assert.notEqual(pa.saltHex, pb.saltHex, 'missing permalink cannot derive stable salt');
+  assert.notEqual(pa.saltHex, pc.saltHex, 'empty permalink cannot derive stable salt');
+});
+
 // ---------------------------------------------------------------------------
 // v4 NEW: per-encryption nonce — same content built twice → different nonce/ciphertext
 // ---------------------------------------------------------------------------
@@ -629,6 +716,22 @@ test('data-auto-save reflects autoSave: true when user opts in', async () => {
   assert.equal(p.autoSave, 'true');
 });
 
+test('#249: quoted autoSave: "false" renders data-auto-save="false" (no key storage)', async () => {
+  hexo.config.encrypt = { autoSave: 'false' };
+  const data = makeSyntheticData({ title: 'as-quoted-false', password: 'p' });
+  await hexo.execFilter('after_post_render', data, { context: hexo });
+  assert.equal(extractPayload(data.content).autoSave, 'false');
+});
+
+test('#249: non-boolean autoSave fails the build', async () => {
+  hexo.config.encrypt = {};
+  const data = makeSyntheticData({ title: 'as-number', password: 'p', autoSave: 1 });
+  await assert.rejects(
+    hexo.execFilter('after_post_render', data, { context: hexo }),
+    /front-matter autoSave must be a boolean/,
+  );
+});
+
 // ---------------------------------------------------------------------------
 // v4 NEW: data-whm defaulting (whm := wpm when user did not set whm)
 // ---------------------------------------------------------------------------
@@ -696,6 +799,176 @@ test('matching tag with empty-string password is bypassed (cfg null guard)', asy
 
   assert.equal(data.encrypt, undefined);
   assert.equal(data.content, before);
+});
+
+// ---------------------------------------------------------------------------
+// #244 — a matching tag WITHOUT a password must fail the build (fail closed),
+// never publish the post in plaintext.
+// ---------------------------------------------------------------------------
+for (const [label, tagEntry] of [
+  ['missing', { name: 'Secret' }],
+  ['null', { name: 'Secret', password: null }],
+]) {
+  test(`#244: matching tag with ${label} password fails the build with a descriptive error`, async () => {
+    hexo.config.encrypt = { tags: [tagEntry] };
+    const data = makeSyntheticData({
+      title: `tag-${label}-pw`,
+      tags: [{ name: 'Secret' }],
+    });
+    delete data.password;
+
+    await assert.rejects(
+      hexo.execFilter('after_post_render', data, { context: hexo }),
+      (err) => /encrypt\.tags/.test(err.message)
+        && /"Secret"/.test(err.message)
+        && /tag-.*-pw/.test(err.message)
+        && /password/.test(err.message),
+    );
+    assert.notEqual(data.encrypt, true);
+    assert.ok(data.content.includes(SECRET_NEEDLE), 'content untouched (build fails instead)');
+  });
+}
+
+test('#244: front-matter password: "" still opts out of a password-less matching tag', async () => {
+  hexo.config.encrypt = { tags: [{ name: 'Secret' }] };
+  const data = makeSyntheticData({
+    title: 'tag-no-pw-optout',
+    password: '',
+    tags: [{ name: 'Secret' }],
+  });
+  await hexo.execFilter('after_post_render', data, { context: hexo });
+  assert.equal(data.encrypt, undefined);
+});
+
+test('#244: a password-less tag entry does not affect posts without that tag', async () => {
+  hexo.config.encrypt = { tags: [{ name: 'Secret' }] };
+  const data = makeSyntheticData({ title: 'other-tag', tags: [{ name: 'Public' }] });
+  delete data.password;
+  await hexo.execFilter('after_post_render', data, { context: hexo });
+  assert.equal(data.encrypt, undefined);
+  assert.ok(data.content.includes(SECRET_NEEDLE));
+});
+
+// ---------------------------------------------------------------------------
+// #251 — environment-variable passwords (front matter and encrypt.tags).
+// ---------------------------------------------------------------------------
+const ENV_NAME = 'HBE_FILTER_TEST_PASSWORD_251';
+const ENV_VALUE = 'filter-env-secret-251';
+
+async function withEnvAsync(value, fn) {
+  const prev = process.env[ENV_NAME];
+  if (value === undefined) delete process.env[ENV_NAME];
+  else process.env[ENV_NAME] = value;
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env[ENV_NAME];
+    else process.env[ENV_NAME] = prev;
+  }
+}
+
+function captureLogs() {
+  const lines = [];
+  const orig = {};
+  for (const level of ['info', 'warn', 'error', 'debug']) {
+    orig[level] = hexo.log[level];
+    hexo.log[level] = (m) => { lines.push(String(m)); };
+  }
+  return {
+    lines,
+    restore() { Object.assign(hexo.log, orig); },
+  };
+}
+
+for (const where of ['front matter', 'encrypt.tags']) {
+  test(`#251: { env } password via ${where} decrypts and is never rendered or logged`, async () => {
+    await withEnvAsync(ENV_VALUE, async () => {
+      const ref = { env: ENV_NAME };
+      const data = makeSyntheticData({ title: `env-${where}`, tags: [{ name: 'Secret' }] });
+      if (where === 'front matter') {
+        hexo.config.encrypt = {};
+        data.password = ref;
+      } else {
+        hexo.config.encrypt = { tags: [{ name: 'Secret', password: ref }] };
+        delete data.password;
+      }
+      const logs = captureLogs();
+      try {
+        await hexo.execFilter('after_post_render', data, { context: hexo });
+      } finally {
+        logs.restore();
+      }
+      assert.equal(data.encrypt, true);
+      assert.ok(!data.content.includes(ENV_VALUE), 'env value must not be rendered');
+      assert.ok(logs.lines.every((l) => !l.includes(ENV_VALUE)), 'env value must not be logged');
+      if (where === 'front matter') assert.deepEqual(data.password, ref, 'front matter not rewritten');
+      const payload = extractPayload(data.content);
+      assert.ok(decryptHbeV4({ password: ENV_VALUE, ...payload }).includes(SECRET_NEEDLE));
+    });
+  });
+
+  test(`#251: missing env var via ${where} fails the build naming the variable`, async () => {
+    await withEnvAsync(undefined, async () => {
+      const data = makeSyntheticData({ title: `env-missing-${where}`, tags: [{ name: 'Secret' }] });
+      if (where === 'front matter') {
+        hexo.config.encrypt = {};
+        data.password = { env: ENV_NAME };
+      } else {
+        hexo.config.encrypt = { tags: [{ name: 'Secret', password: { env: ENV_NAME } }] };
+        delete data.password;
+      }
+      await assert.rejects(
+        hexo.execFilter('after_post_render', data, { context: hexo }),
+        (err) => err.message.includes(ENV_NAME) && /not set or is empty/.test(err.message),
+      );
+      assert.notEqual(data.encrypt, true);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// #252 — the filter is async (Hexo awaits it) so PBKDF2 does not block the loop.
+// ---------------------------------------------------------------------------
+test('#252: after_post_render filter returns a Promise and concurrent posts all decrypt', async () => {
+  hexo.config.encrypt = {};
+  const fn = hexo.extend.filter.list('after_post_render').find((f) => f.name === 'v4Filter');
+  assert.ok(fn, 'v4Filter must be registered');
+  const probe = makeSyntheticData({ title: 'async-probe', password: 'p' });
+  const ret = fn.call(hexo, probe);
+  assert.ok(ret instanceof Promise, 'filter must return a Promise');
+  await ret;
+  assert.equal(probe.encrypt, true);
+
+  const posts = [1, 2, 3, 4].map((i) => makeSyntheticData({ title: `async-${i}`, password: `pw${i}` }));
+  await Promise.all(posts.map((d) => hexo.execFilter('after_post_render', d, { context: hexo })));
+  posts.forEach((d, i) => {
+    assert.equal(d.encrypt, true);
+    assert.ok(decryptHbeV4({ password: `pw${i + 1}`, ...extractPayload(d.content) }).includes(SECRET_NEEDLE));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #259 — localized defaults reach the rendered wrapper and the excerpt.
+// ---------------------------------------------------------------------------
+test('#259: site language zh-CN renders Chinese default message, button and abstract', async () => {
+  const originalLanguage = hexo.config.language;
+  hexo.config.language = 'zh-CN';
+  hexo.config.encrypt = {};
+  try {
+    const data = makeSyntheticData({ title: 'zh-defaults', password: 'p' });
+    await hexo.execFilter('after_post_render', data, { context: hexo });
+    assert.ok(data.content.includes('您好, 这里需要密码.'));
+    assert.match(data.content, /<button class="hbe hbe-button"[^>]*>解密<\/button>/);
+    assert.equal(extractPayload(data.content).wpm, '抱歉, 这个密码看着不太对, 请再试试.');
+    assert.equal(data.more, '有东西被加密了, 请输入密码查看.');
+
+    const en = makeSyntheticData({ title: 'en-post', password: 'p', lang: 'en' });
+    await hexo.execFilter('after_post_render', en, { context: hexo });
+    assert.ok(en.content.includes(DEFAULT_MESSAGE));
+    assert.equal(en.more, DEFAULT_ABSTRACT);
+  } finally {
+    hexo.config.language = originalLanguage;
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -813,4 +1086,48 @@ test('hexo.config.encrypt = ["array"] (malformed) does not crash; uses defaults'
   const data = makeSyntheticData({ title: 'yaml-arr', password: 'p' });
   await hexo.execFilter('after_post_render', data, { context: hexo });
   assert.equal(data.encrypt, true);
+});
+
+// ---------------------------------------------------------------------------
+// Argon2id front-matter path (fork addition)
+// ---------------------------------------------------------------------------
+test('argon2id front-matter encryption emits argon2id wire attributes', async () => {
+  const argon2 = require('argon2');
+  hexo.config.encrypt = {
+    kdf: { algorithm: 'argon2id', timeCost: 2, memoryCost: 8192, parallelism: 1 },
+  };
+  try {
+    const data = makeSyntheticData({ title: 'argon2-post', password: 'p' });
+    await hexo.execFilter('after_post_render', data, { context: hexo });
+
+    assert.equal(data.encrypt, true);
+    assert.match(data.content, /data-kdf-algorithm="argon2id"/);
+    assert.match(data.content, /data-kdf-time-cost="2"/);
+    assert.match(data.content, /data-kdf-memory-cost="8192"/);
+    assert.match(data.content, /data-kdf-parallelism="1"/);
+
+    const payload = extractPayload(data.content);
+    const timeCost = Number(/data-kdf-time-cost="([^"]*)"/.exec(data.content)[1]);
+    const memoryCost = Number(/data-kdf-memory-cost="([^"]*)"/.exec(data.content)[1]);
+    const parallelism = Number(/data-kdf-parallelism="([^"]*)"/.exec(data.content)[1]);
+    const dk = await argon2.hash('p', {
+      type: argon2.argon2id,
+      salt: Buffer.from(payload.saltHex, 'hex'),
+      timeCost,
+      memoryCost,
+      parallelism,
+      hashLength: 32,
+      raw: true,
+    });
+    const blob = Buffer.from(payload.ciphertextHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', dk, Buffer.from(payload.nonceHex, 'hex'));
+    decipher.setAuthTag(blob.subarray(blob.length - 16));
+    const plaintext = Buffer.concat([
+      decipher.update(blob.subarray(0, blob.length - 16)),
+      decipher.final(),
+    ]).toString('utf8');
+    assert.match(plaintext, /THE SECRET IS BUTTERFLY/);
+  } finally {
+    hexo.config.encrypt = {};
+  }
 });

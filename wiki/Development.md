@@ -1,0 +1,77 @@
+# Development
+
+[简体中文](Development-zh-CN)
+
+How to work on this project — setup, test commands, and basic workflow rules.
+
+## Setup (after a fresh clone)
+
+```sh
+npm install
+```
+
+That's it. No submodules, no extra steps.
+
+## Test commands
+
+| Command | What it runs |
+| --- | --- |
+| `npm test` | Lint + server tests (`tests/server/*.test.js`, `tests/docs.test.js`) + Playwright e2e against all 8 themes. The full suite CI runs. |
+| `npm run lint` | ESLint (flat config, `eslint.config.js`) over the whole repo except `demo/` and build outputs. |
+| `npm run test:server` | Server-side Node tests only. Fast (no browser). |
+| `npm run test:e2e` | Playwright e2e only. Spins up a real Hexo build of `tests/fixtures/hexo-site/`, serves it, drives Chromium, Firefox and WebKit (`--project=chromium` to run one). |
+| `npm run build` | Rebuild the browser bundle (`lib/hbe.bundle.js`) via esbuild. Runs as `prepack` automatically before `npm publish`. |
+
+Run `npm test` BEFORE you push anything that touches `src/`, `lib/`, or
+`tests/`. CI will reject regressions; running locally first catches
+them in seconds.
+
+## Workflow basics
+
+- **No production code without a failing test first.** Add the test,
+  watch it fail, then make it pass.
+- **Root-cause fixes.** Don't paper over symptoms; understand why
+  something broke before patching.
+- **Verify before claiming done.** Re-run the relevant tests after
+  every change.
+- **Backward compatibility.** New config options must default safely.
+  Existing encrypted posts in the wild must still decrypt against the
+  new bundle, OR the wire-format byte (`data-hbe-format`) must bump in
+  lockstep with the bundle.
+
+## Branch protection
+
+The `Tests` workflow runs `lint-and-server` and sharded `e2e` jobs. All must
+pass before merging or releasing.
+
+| Job | Matrix |
+| --- | --- |
+| `lint-and-server` | Node 18, 20, 22, 24, 26 with the Hexo 7 fixture, plus Node 24 with Hexo 8. Lint runs once (Node 22). Node 18 runs plain `node --test` without the coverage gate, because c8 and ESLint need Node 20.19+. |
+| `e2e` | Chromium, Firefox and WebKit against the Hexo 7 fixture, plus Chromium against Hexo 8; two shards each. |
+
+CI installs the root with `npm ci` from the committed `package-lock.json`.
+The fixture site has no lockfile: CI sets its `hexo` dependency to the
+matrix major before `npm install`. Repository branch-protection settings may
+vary; the staged rollout process for required checks is documented in
+[`.github/CONTRIBUTING.md`](https://github.com/D0n9X1n/hexo-blog-encrypt/blob/master/.github/CONTRIBUTING.md).
+
+CODEOWNERS (`.github/CODEOWNERS`) makes `@D0n9X1n` the default reviewer
+on every PR.
+
+## Adding a theme
+
+See [Theme Authoring](Theme-Authoring). It's a one-file drop — no edits to
+`src/server/` or `src/browser/` needed.
+
+## Cutting a release
+
+See [Release Process](Release-Process). Pre-flight checklist + tag
+flow + GH Packages mirror + troubleshooting all in one place.
+
+## See also
+
+- [Architecture](Architecture) — codebase orientation.
+- [Release Process](Release-Process) — release procedure.
+- [Theme Authoring](Theme-Authoring) — theme contract.
+- [`.github/CONTRIBUTING.md`](https://github.com/D0n9X1n/hexo-blog-encrypt/blob/master/.github/CONTRIBUTING.md) — contributor
+  guidelines + branch-protection rollout.
