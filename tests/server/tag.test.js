@@ -354,3 +354,67 @@ test('renderBody coerces a null renderer result to an empty string', async () =>
   });
   assert.equal(out, '');
 });
+
+// ---------------------------------------------------------------------------
+// Nesting — same-name `{% encrypt %}` blocks and cross-name combinations.
+// (Upstream Nunjucks parses same-name nesting fine once the outer body is a
+// plain marker; the failure mode was Markdown re-rendering inner widget HTML.)
+// ---------------------------------------------------------------------------
+test('same-name {% encrypt %} nests three layers deep', async () => {
+  const html = await render(
+    '{% encrypt "a" %}P2 {% encrypt "b" %}P3 ' +
+    '{% encrypt "c" %}' + SECRET + '{% endencrypt %}{% endencrypt %}{% endencrypt %}'
+  );
+
+  assert.equal(html.includes('BLOCK SECRET'), false);
+  assert.equal(html.includes('hexo-blog-encrypt:stash'), false);
+  // The outer widget's ciphertext must not have been Markdown-ified.
+  assert.equal(/<br>\s*<script id="hbeData"/.test(html), false);
+
+  let layer = html;
+  for (const [password, visible] of [['a', 'P2'], ['b', 'P3'], ['c', null]]) {
+    layer = await decryptPayload(extractPayload(layer), password);
+    if (visible) {
+      assert.match(layer, new RegExp(visible));
+      assert.doesNotMatch(layer, /BLOCK SECRET/);
+    }
+  }
+  assert.equal(layer, SECRET);
+});
+
+test('{% encrypt %} can wrap {% encrypt_nested %} and vice versa', async () => {
+  // encrypt -> encrypt_nested
+  let layer = await render(
+    '{% encrypt "outer" %}PUBLIC2 {% encrypt_nested "a" "b" %}' + SECRET +
+    '{% endencrypt_nested %}{% endencrypt %}'
+  );
+  layer = await decryptPayload(extractPayload(layer), 'outer');
+  assert.match(layer, /PUBLIC2/);
+  layer = await decryptPayload(extractPayload(layer), 'a');
+  layer = await decryptPayload(extractPayload(layer), 'b');
+  assert.equal(layer, SECRET);
+
+  // encrypt_nested -> encrypt
+  layer = await render(
+    '{% encrypt_nested "outer" "second" %}PUBLIC2 {% encrypt "inner" %}' + SECRET +
+    '{% endencrypt %}{% endencrypt_nested %}'
+  );
+  layer = await decryptPayload(extractPayload(layer), 'outer');
+  layer = await decryptPayload(extractPayload(layer), 'second');
+  assert.match(layer, /PUBLIC2/);
+  layer = await decryptPayload(extractPayload(layer), 'inner');
+  assert.equal(layer, SECRET);
+});
+
+test('restoreStash leaves unknown placeholder ids untouched', async () => {
+  const out = await _internal.renderBody('<p>x</p><!--hexo-blog-encrypt:stash:missing-->', {
+    post: { engine: 'markdown' },
+    stash: new Map([['other', 'unused']]),
+    hexo: {
+      render: {
+        render: async ({ text }) => text,
+      },
+    },
+  });
+  assert.equal(out, '<p>x</p><!--hexo-blog-encrypt:stash:missing-->');
+});

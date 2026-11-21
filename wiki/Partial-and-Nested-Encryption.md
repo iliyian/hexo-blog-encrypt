@@ -84,17 +84,27 @@ Only someone with both passwords can read this.
 
 The block is encrypted first, then the whole post (including the block container) is encrypted by the normal `password:` filter. This is the same two-layer result as `encrypt_nested`, but the outer layer's prompt is the standard post password form.
 
-### Same-name limitation
+### Nesting `{% encrypt %}` inside `{% encrypt %}`
 
-Nunjucks cannot parse two nested block tags with the same name, so this does **not** work:
+Same-name nesting works, any depth:
 
 ```markdown
-{% encrypt "outer" %}
-{% encrypt "inner" %}...{% endencrypt %}
+{% encrypt "a" %}
+Seen after the first password.
+
+{% encrypt "b" %}
+Seen after the second password.
+
+{% encrypt "c" %}
+Final secret.
+{% endencrypt %}
+{% endencrypt %}
 {% endencrypt %}
 ```
 
-Use `encrypt_nested` for explicit layers, or the post-level `password:` + `{% encrypt %}` combination above. Different tag names can be nested when needed.
+Inner widgets are stashed behind HTML-comment placeholders while the outer body goes through the Markdown engine, then restored. Without that, Markdown would convert the indented ciphertext inside `<script id="hbeData">` into `<br>` and break decryption.
+
+`{% encrypt %}` and `{% encrypt_nested %}` can also be nested in either order. `encrypt_nested` remains the shorter form when every layer is explicit; same-name nesting is the natural fit when each layer also contains public text.
 
 ## Rendering, assets and caching
 

@@ -29,7 +29,9 @@ const { encrypt, encryptArgon2id } = require('./crypto');
 const FORMAT_VERSION = '4';
 const START_PREFIX = '<!--hexo-blog-encrypt:start:';
 const END_PREFIX = '<!--hexo-blog-encrypt:end:';
+const STASH_PREFIX = '<!--hexo-blog-encrypt:stash:';
 const START_RE = /<!--hexo-blog-encrypt:start:([0-9a-z]+):([A-Za-z0-9+/=]*)-->/g;
+const STASH_RE = /<!--hexo-blog-encrypt:stash:([0-9a-z]+)-->/g;
 
 let markerSeq = 0;
 
@@ -182,6 +184,19 @@ function findLastStart(html) {
   return last;
 }
 
+// Restore stashed inner widgets. Nested tags are processed innermost-first,
+// and the widget HTML must not be fed through the outer block's Markdown
+// pass: Markdown would turn the indented ciphertext inside
+// <script id="hbeData"> into <br>, corrupting it.
+function restoreStash(html, stash, depth) {
+  const level = depth || 0;
+  if (!stash || stash.size === 0 || level > 100) return html;
+  return html.replace(STASH_RE, (match, id) => {
+    if (!stash.has(id)) return match;
+    return restoreStash(stash.get(id), stash, level + 1);
+  });
+}
+
 async function renderBody(body, deps) {
   const { hexo, post } = deps;
   const engine = (post && post.engine) || 'markdown';
@@ -191,7 +206,7 @@ async function renderBody(body, deps) {
       engine,
       toString: true,
     });
-    return String(rendered == null ? '' : rendered);
+    return restoreStash(String(rendered == null ? '' : rendered), deps.stash);
   } catch (e) {
     throw new Error(
       `hexo-blog-encrypt: failed to render {% encrypt %} block body${titleOf(post)}: ${e.message}`,
@@ -244,6 +259,11 @@ async function renderLayers(post, options, body, deps) {
 }
 
 async function processBlocks(html, deps) {
+  // Widget HTML produced for an inner block must survive the outer block's
+  // Markdown pass untouched, so it is swapped for a comment placeholder and
+  // restored by `renderBody` after Markdown has run.
+  const stash = deps.stash || new Map();
+  const ctx = Object.assign({}, deps, { stash });
   let out = String(html);
   let guard = 0;
 
@@ -253,22 +273,25 @@ async function processBlocks(html, deps) {
       const endAt = out.indexOf(END_PREFIX);
       if (endAt !== -1) {
         throw new Error(
-          `hexo-blog-encrypt: unmatched encrypt-tag end marker${titleOf(deps.post)}.`
+          `hexo-blog-encrypt: unmatched encrypt-tag end marker${titleOf(ctx.post)}.`
         );
       }
-      return out;
+      return restoreStash(out, stash);
     }
 
     const endToken = END_PREFIX + start.id + '-->';
     const endAt = out.indexOf(endToken, start.index + start.token.length);
     if (endAt === -1) {
       throw new Error(
-        `hexo-blog-encrypt: unclosed {% ${start.options.tagName} %} block${titleOf(deps.post)}.`
+        `hexo-blog-encrypt: unclosed {% ${start.options.tagName} %} block${titleOf(ctx.post)}.`
       );
     }
     const body = out.slice(start.index + start.token.length, endAt);
-    const replacement = await renderLayers(deps.post, start.options, body, deps);
-    out = out.slice(0, start.index) + replacement + out.slice(endAt + endToken.length);
+    const replacement = await renderLayers(ctx.post, start.options, body, ctx);
+    const stashId = (++markerSeq).toString(36);
+    stash.set(stashId, replacement);
+    out = out.slice(0, start.index) + STASH_PREFIX + stashId + '-->' +
+      out.slice(endAt + endToken.length);
 
     /* c8 ignore next 3 — defensive: marker count is bounded by post size */
     if (++guard > 10000) {

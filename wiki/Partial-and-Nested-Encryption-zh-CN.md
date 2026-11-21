@@ -84,17 +84,27 @@ password: outer-password
 
 插件先加密块, 再由正常的 `password:` 过滤器加密整篇文章 (包括块容器). 效果和 `encrypt_nested` 的两层嵌套相同, 只是外层提示使用的是标准文章密码表单.
 
-### 同名标签限制
+### `{% encrypt %}` 嵌套 `{% encrypt %}`
 
-Nunjucks 无法解析两个同名的嵌套成对标签, 所以下面这样**不行**:
+同名 nesting 可以工作, 层数不限:
 
 ```markdown
-{% encrypt "outer" %}
-{% encrypt "inner" %}...{% endencrypt %}
+{% encrypt "a" %}
+输入第一个密码后可见.
+
+{% encrypt "b" %}
+输入第二个密码后可见.
+
+{% encrypt "c" %}
+最终秘密.
+{% endencrypt %}
+{% endencrypt %}
 {% endencrypt %}
 ```
 
-需要显式多层时请用 `encrypt_nested`, 或者用文章级 `password:` + `{% encrypt %}` 的组合. 不同名的标签可以嵌套.
+外层块内容交给 Markdown 引擎之前, 内层控件会先换成 HTML 注释占位符, 渲染后再还原. 否则 Markdown 会把 `<script id="hbeData">` 里缩进的密文变成 `<br>`, 导致解密失败.
+
+`{% encrypt %}` 和 `{% encrypt_nested %}` 也可以互相嵌套. 所有层都是显式密码时 `encrypt_nested` 更简短; 每层还需要公开文字时, 同名嵌套更自然.
 
 ## 渲染、资源与缓存
 
