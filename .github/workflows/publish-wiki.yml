@@ -63,5 +63,7 @@ jobs:
         run: bash scripts/publish-wiki.sh wiki wiki-repo "$GITHUB_SHA"
 
       - name: Push wiki mirror
-        if: steps.wiki.outputs.available == 'true' && steps.mirror.outputs.changed == 'true'
+        # When the wiki repo is unavailable the mirror step is skipped, so
+        # `changed` stays empty and this condition is false.
+        if: steps.mirror.outputs.changed == 'true'
         run: git -C wiki-repo push origin HEAD:master
