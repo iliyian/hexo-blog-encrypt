@@ -30,7 +30,26 @@ jobs:
       - name: Check wiki pages
         run: python3 scripts/check-wiki.py
 
+      # Forks do not inherit the upstream wiki, and GitHub only materialises
+      # `<repo>.wiki.git` after the first page is created through the web UI.
+      # Detect that case up front: report a notice and skip instead of failing
+      # on a clone that can never succeed.
+      - name: Check wiki repository
+        id: wiki
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git ls-remote \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" \
+            >/dev/null 2>&1; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Wiki repository missing::${GITHUB_REPOSITORY}.wiki.git does not exist (forks do not inherit wikis). Skipping the wiki mirror; create the first wiki page once in the web UI to enable publishing."
+          fi
+
       - name: Clone wiki repository
+        if: steps.wiki.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -39,9 +58,10 @@ jobs:
             wiki-repo
 
       - name: Build wiki mirror
+        if: steps.wiki.outputs.available == 'true'
         id: mirror
         run: bash scripts/publish-wiki.sh wiki wiki-repo "$GITHUB_SHA"
 
       - name: Push wiki mirror
-        if: steps.mirror.outputs.changed == 'true'
+        if: steps.wiki.outputs.available == 'true' && steps.mirror.outputs.changed == 'true'
         run: git -C wiki-repo push origin HEAD:master
